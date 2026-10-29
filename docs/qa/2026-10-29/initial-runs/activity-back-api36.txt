@@ -1,0 +1,55 @@
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest:
+INSTRUMENTATION_STATUS: test=reflowableReaderFollowsSystemNightModeAcrossActivityRecreation
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=reflowableReaderFollowsSystemNightModeAcrossActivityRecreation
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Timeout: settings system Back
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:334)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:328)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:164)
+
+INSTRUMENTATION_STATUS: stream=
+Error in realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest):
+java.lang.AssertionError: Timeout: settings system Back
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:334)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:328)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:164)
+
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 57.876
+There was 1 failure:
+1) realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest)
+java.lang.AssertionError: Timeout: settings system Back
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:334)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:328)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:164)
+
+FAILURES!!!
+Tests run: 2,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

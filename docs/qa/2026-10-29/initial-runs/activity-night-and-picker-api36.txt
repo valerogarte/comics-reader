@@ -1,0 +1,74 @@
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest:
+INSTRUMENTATION_STATUS: test=reflowableReaderFollowsSystemNightModeAcrossActivityRecreation
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Timeout: reader bitmap adopts the system dark background after recreation
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.reflowableReaderFollowsSystemNightModeAcrossActivityRecreation(NativeMainActivityInstrumentedTest.kt:200)
+
+INSTRUMENTATION_STATUS: stream=
+Error in reflowableReaderFollowsSystemNightModeAcrossActivityRecreation(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest):
+java.lang.AssertionError: Timeout: reader bitmap adopts the system dark background after recreation
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.reflowableReaderFollowsSystemNightModeAcrossActivityRecreation(NativeMainActivityInstrumentedTest.kt:200)
+
+INSTRUMENTATION_STATUS: test=reflowableReaderFollowsSystemNightModeAcrossActivityRecreation
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Timeout: owned fixture inside the DocumentsUI directory list
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:282)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:158)
+
+INSTRUMENTATION_STATUS: stream=
+Error in realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest):
+java.lang.AssertionError: Timeout: owned fixture inside the DocumentsUI directory list
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:282)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:158)
+
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 89.636
+There were 2 failures:
+1) reflowableReaderFollowsSystemNightModeAcrossActivityRecreation(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest)
+java.lang.AssertionError: Timeout: reader bitmap adopts the system dark background after recreation
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.reflowableReaderFollowsSystemNightModeAcrossActivityRecreation(NativeMainActivityInstrumentedTest.kt:200)
+2) realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest)
+java.lang.AssertionError: Timeout: owned fixture inside the DocumentsUI directory list
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:330)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await$default(NativeMainActivityInstrumentedTest.kt:324)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:282)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:158)
+
+FAILURES!!!
+Tests run: 2,  Failures: 2
+
+
+INSTRUMENTATION_CODE: -1

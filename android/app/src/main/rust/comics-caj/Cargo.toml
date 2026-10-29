@@ -1,0 +1,21 @@
+[package]
+name = "comics-caj"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[lib]
+name = "comics_caj"
+crate-type = ["cdylib"]
+
+[dependencies]
+caj2pdf-core = { path = "../vendor/caj2pdf-core-0.8.1" }
+jni = "=0.21.1"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "unwind"

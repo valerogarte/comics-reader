@@ -1,0 +1,2 @@
+zipalign -c -P 16 4 app-debug.apk: PASS (exit 0)
+All 64-bit ELF PT_LOAD segments: alignment >= 16384 bytes. See apk-checks.json.

@@ -1,0 +1,6 @@
+Native SftpClient real SSH checks passed: 18
+Scope: current SftpClient.java; JSch 2.28.8; independent isolated Paramiko SSH/SFTP fixture on loopback ports 22993/22994. No real NAS; Android fixture ports 22991/22992 not touched.
+Checks 1-13: listing, exact payload byte count, root confinement, symlinks, invalid ranges, receive deadline, literal question marks, explicit stream download, cancellation cleanup, remote-file mutation and changed host-key rejection.
+Additional 5 checks: stalled explicit download is rejected and its .part removed; a progressing 4.6 MB download outlives the 300 ms inactivity timeout; stalled LIST and pre-range STAT each stop before 1.5 seconds; Thread.interrupt stops a stalled download within 1 second, removes its .part and preserves the shared SSH session for another channel.
+Injected deadlines: 300 ms channel inactivity against 1.2-second fixture responses; 300 ms raw range receive. Production defaults: 30 seconds per-channel inactivity, reset after each downloaded block; 15 seconds total per exact range; SSH connection timeout 10 seconds.
+Regression found and corrected: after InterruptedIOException, JSch stream.close() drains pending READ replies; the failure path now disconnects the affected channel before closing that stream.

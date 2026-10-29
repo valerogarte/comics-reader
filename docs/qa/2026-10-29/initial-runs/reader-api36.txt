@@ -1,0 +1,601 @@
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest:
+INSTRUMENTATION_STATUS: test=mhtmlNativeTextReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=mhtmlNativeTextReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=xhtmlNativeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=xhtmlNativeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=pptBinaryTextRecordReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=pptBinaryTextRecordReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=pdfPageRenderingAndMetadata
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=pdfPageRenderingAndMetadata
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=explicitComicCoverAndMissingCoverFallback
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=explicitComicCoverAndMissingCoverFallback
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cbzComicPagesAndMetadata
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=cbzComicPagesAndMetadata
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=reflowSettingsChangePaginationAndBackground
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=reflowSettingsChangePaginationAndBackground
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=kdzSessionDeletesItsExtractedBook
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=kdzSessionDeletesItsExtractedBook
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=xpsFixedPageReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=xpsFixedPageReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=docBinaryPieceTableReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=docBinaryPieceTableReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=htmlNativeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=htmlNativeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=azwHybridNativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=azwHybridNativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=epubReflowsAndHasCover
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=epubReflowsAndHasCover
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=rangeFailureAndCancellationDoNotWriteRemoteBooks
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Interrupted preview must not invoke its network source expected:<0> but was:<1>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.rangeFailureAndCancellationDoNotWriteRemoteBooks(NativeReaderInstrumentedTest.kt:107)
+
+INSTRUMENTATION_STATUS: stream=
+Error in rangeFailureAndCancellationDoNotWriteRemoteBooks(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest):
+java.lang.AssertionError: Interrupted preview must not invoke its network source expected:<0> but was:<1>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.rangeFailureAndCancellationDoNotWriteRemoteBooks(NativeReaderInstrumentedTest.kt:107)
+
+INSTRUMENTATION_STATUS: test=rangeFailureAndCancellationDoNotWriteRemoteBooks
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=mobiHuffmanNativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=mobiHuffmanNativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=oxpsFixedPageReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=oxpsFixedPageReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=17
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=rtfNativeTextReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=17
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=rtfNativeTextReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=18
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=pptxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=18
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=pptxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=19
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=markdownNativeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=19
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=markdownNativeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=20
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=xmlGenericTextReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=20
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=xmlGenericTextReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=21
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=xlsxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=21
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Rendered page must contain visible content (0 pixels)
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertVisible(NativeReaderInstrumentedTest.kt:185)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:154)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.xlsxNativeOfficeReader(NativeReaderInstrumentedTest.kt:50)
+
+INSTRUMENTATION_STATUS: stream=
+Error in xlsxNativeOfficeReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest):
+java.lang.AssertionError: Rendered page must contain visible content (0 pixels)
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertVisible(NativeReaderInstrumentedTest.kt:185)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:154)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.xlsxNativeOfficeReader(NativeReaderInstrumentedTest.kt:50)
+
+INSTRUMENTATION_STATUS: test=xlsxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=22
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=remotePdfAndEpubReadRangesAndNeverCompleteTheFile
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=22
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=remotePdfAndEpubReadRangesAndNeverCompleteTheFile
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=23
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=docxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=23
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stack=java.lang.RuntimeException: cannot find entry word/_rels/document.xml.rels
+	at com.artifex.mupdf.fitz.Document.openNativeWithPath(Native Method)
+	at com.artifex.mupdf.fitz.Document.openDocument(Document.java:59)
+	at com.valerogarte.comicsreader.nativeapp.reader.MuPdfDocument.<init>(DocumentEngine.kt:198)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:129)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.docxNativeOfficeReader(NativeReaderInstrumentedTest.kt:48)
+
+INSTRUMENTATION_STATUS: stream=
+Error in docxNativeOfficeReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest):
+java.lang.RuntimeException: cannot find entry word/_rels/document.xml.rels
+	at com.artifex.mupdf.fitz.Document.openNativeWithPath(Native Method)
+	at com.artifex.mupdf.fitz.Document.openDocument(Document.java:59)
+	at com.valerogarte.comicsreader.nativeapp.reader.MuPdfDocument.<init>(DocumentEngine.kt:198)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:129)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.docxNativeOfficeReader(NativeReaderInstrumentedTest.kt:48)
+
+INSTRUMENTATION_STATUS: test=docxNativeOfficeReader
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=24
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=djvuNativeJpegLayerReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=24
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=djvuNativeJpegLayerReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=25
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cb7NativeSevenZipComicPages
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=25
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=cb7NativeSevenZipComicPages
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=26
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=txtNativeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=26
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=txtNativeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=27
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=ofdNativeCanvasReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=27
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=ofdNativeCanvasReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=28
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=invalidFilesAndDrmFailWithoutTemporaryLeaks
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=28
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=invalidFilesAndDrmFailWithoutTemporaryLeaks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=29
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cbtTarComicPages
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=29
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=cbtTarComicPages
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=30
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cbrStoredRarComicPages
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=30
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=cbrStoredRarComicPages
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=31
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=mobiCp1252NativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=31
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=mobiCp1252NativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=32
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=chmNativeCompiledHtmlReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=32
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=chmNativeCompiledHtmlReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=33
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=azw3ActualKf8NativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=33
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=azw3ActualKf8NativeReconstruction
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=34
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=fb2NativeReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=34
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=fb2NativeReader
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=35
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cajNativeRustConversionReader
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest
+INSTRUMENTATION_STATUS: current=35
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=35
+INSTRUMENTATION_STATUS: stack=java.io.IOException: No se puede leer este CAJ: ambiguous repair PDF at byte 300, object 1 0: unselected catalog object is present
+	at com.valerogarte.comicsreader.nativeapp.reader.CajDocument.<init>(CajDocument.kt:19)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:112)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.cajNativeRustConversionReader(NativeReaderInstrumentedTest.kt:58)
+
+INSTRUMENTATION_STATUS: stream=
+Error in cajNativeRustConversionReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest):
+java.io.IOException: No se puede leer este CAJ: ambiguous repair PDF at byte 300, object 1 0: unselected catalog object is present
+	at com.valerogarte.comicsreader.nativeapp.reader.CajDocument.<init>(CajDocument.kt:19)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:112)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.cajNativeRustConversionReader(NativeReaderInstrumentedTest.kt:58)
+
+INSTRUMENTATION_STATUS: test=cajNativeRustConversionReader
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 1.58
+There were 4 failures:
+1) rangeFailureAndCancellationDoNotWriteRemoteBooks(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest)
+java.lang.AssertionError: Interrupted preview must not invoke its network source expected:<0> but was:<1>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.rangeFailureAndCancellationDoNotWriteRemoteBooks(NativeReaderInstrumentedTest.kt:107)
+2) xlsxNativeOfficeReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest)
+java.lang.AssertionError: Rendered page must contain visible content (0 pixels)
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertVisible(NativeReaderInstrumentedTest.kt:185)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:154)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.xlsxNativeOfficeReader(NativeReaderInstrumentedTest.kt:50)
+3) docxNativeOfficeReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest)
+java.lang.RuntimeException: cannot find entry word/_rels/document.xml.rels
+	at com.artifex.mupdf.fitz.Document.openNativeWithPath(Native Method)
+	at com.artifex.mupdf.fitz.Document.openDocument(Document.java:59)
+	at com.valerogarte.comicsreader.nativeapp.reader.MuPdfDocument.<init>(DocumentEngine.kt:198)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:129)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.docxNativeOfficeReader(NativeReaderInstrumentedTest.kt:48)
+4) cajNativeRustConversionReader(com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest)
+java.io.IOException: No se puede leer este CAJ: ambiguous repair PDF at byte 300, object 1 0: unselected catalog object is present
+	at com.valerogarte.comicsreader.nativeapp.reader.CajDocument.<init>(CajDocument.kt:19)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open(DocumentEngine.kt:112)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine.open$default(DocumentEngine.kt:102)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader(NativeReaderInstrumentedTest.kt:149)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.assertReader$default(NativeReaderInstrumentedTest.kt:147)
+	at com.valerogarte.comicsreader.nativeapp.reader.NativeReaderInstrumentedTest.cajNativeRustConversionReader(NativeReaderInstrumentedTest.kt:58)
+
+FAILURES!!!
+Tests run: 35,  Failures: 4
+
+
+INSTRUMENTATION_CODE: -1

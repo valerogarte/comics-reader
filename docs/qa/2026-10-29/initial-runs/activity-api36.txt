@@ -1,0 +1,41 @@
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest:
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Timeout: DocumentsUI returns the selected content URI
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:247)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:222)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:145)
+
+INSTRUMENTATION_STATUS: stream=
+Error in realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest):
+java.lang.AssertionError: Timeout: DocumentsUI returns the selected content URI
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:247)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:222)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:145)
+
+INSTRUMENTATION_STATUS: test=realSafImportReadRecreateFontBackgroundAndSettingsClose
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 34.972
+There was 1 failure:
+1) realSafImportReadRecreateFontBackgroundAndSettingsClose(com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest)
+java.lang.AssertionError: Timeout: DocumentsUI returns the selected content URI
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.await(NativeMainActivityInstrumentedTest.kt:247)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.chooseDocument(NativeMainActivityInstrumentedTest.kt:222)
+	at com.valerogarte.comicsreader.NativeMainActivityInstrumentedTest.realSafImportReadRecreateFontBackgroundAndSettingsClose(NativeMainActivityInstrumentedTest.kt:145)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

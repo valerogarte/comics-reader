@@ -1,0 +1,1168 @@
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest:
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites$1.invokeSuspend(NativeDataInstrumentedTest.kt:322)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites(NativeDataInstrumentedTest.kt:316)
+	... 34 trimmed
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites$1.invokeSuspend(NativeDataInstrumentedTest.kt:322)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites(NativeDataInstrumentedTest.kt:316)
+	... 34 trimmed
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:278)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:277)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured$lambda$3(LibraryRepository.kt:267)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.$r8$lambda$uuB1kSyWf2Dk6wO5oUKlOV2BMVg(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$$ExternalSyntheticLambda1.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:266)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:37)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:240)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	... 8 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:278)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:277)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured$lambda$3(LibraryRepository.kt:267)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.$r8$lambda$uuB1kSyWf2Dk6wO5oUKlOV2BMVg(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$$ExternalSyntheticLambda1.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:266)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:37)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:240)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	... 8 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 0.959
+There were 9 failures:
+1) changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+2) firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+3) explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+4) cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+5) twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+6) realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites$1.invokeSuspend(NativeDataInstrumentedTest.kt:322)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites(NativeDataInstrumentedTest.kt:316)
+	... 34 trimmed
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+7) realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+8) differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:278)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:277)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured$lambda$3(LibraryRepository.kt:267)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.$r8$lambda$uuB1kSyWf2Dk6wO5oUKlOV2BMVg(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$$ExternalSyntheticLambda1.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:266)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:37)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:240)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	... 8 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+9) realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.NoClassDefFoundError: com.jcraft.jsch.SftpATTRS
+	at com.jcraft.jsch.SftpATTRS.getATTR(SftpATTRS.java:174)
+	at com.jcraft.jsch.ChannelSftp._realpath(ChannelSftp.java:2315)
+	at com.jcraft.jsch.ChannelSftp.realpath(ChannelSftp.java:3092)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$listShelf$0(SftpClient.java:113)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:377)
+	at com.valerogarte.comicsreader.sftp.SftpClient.listShelf(SftpClient.java:112)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend$lambda$0$1(LibraryRepository.kt:186)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.$r8$lambda$x_trw1nhikiwB9YO6fZHFnznjPw(LibraryRepository.kt)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2$$ExternalSyntheticLambda0.invoke(D8$$SyntheticClass:0)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invoke(Interruptible.kt)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndspatched(Undispatched.kt:66)
+	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:165)
+	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptible(Interruptible.kt:39)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$loadRemoteFolder$2.invokeSuspend(LibraryRepository.kt:186)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Ljava/time/format/DateTimeFormatter;
+	at com.jcraft.jsch.SftpATTRS.<clinit>(SftpATTRS.java:139)
+	... 29 more
+Caused by: java.lang.ClassNotFoundException: Didn't find class "java.time.format.DateTimeFormatter" on path: DexPathList[[zip file "/system/framework/android.test.runner.jar", zip file "/data/app/com.valerogarte.comicsreader.test-1/base.apk", zip file "/data/app/com.valerogarte.comicsreader-1/base.apk"],nativeLibraryDirectories=[/data/app/com.valerogarte.comicsreader.test-1/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/lib/x86_64, /data/app/com.valerogarte.comicsreader.test-1/base.apk!/lib/x86_64, /data/app/com.valerogarte.comicsreader-1/base.apk!/lib/x86_64, /system/lib64, /vendor/lib64]]
+	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:56)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:380)
+	at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
+	... 30 more
+
+FAILURES!!!
+Tests run: 16,  Failures: 9
+
+
+INSTRUMENTATION_CODE: -1

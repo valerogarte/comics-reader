@@ -1,0 +1,1041 @@
+// SPDX-License-Identifier: MIT
+
+//! Original calculations and caller-input checks; no document bytes or tables.
+
+use super::*;
+use crate::ErrorKind;
+
+fn close(actual: f64, expected: f64) {
+    assert!(
+        (actual - expected).abs() <= 0.000_000_000_001,
+        "{actual} differs from {expected}"
+    );
+}
+
+fn page() -> EmpiricalPageGeometry {
+    empirical_page_from_pixels(100, 250, [-3.25, 1.125]).unwrap()
+}
+
+#[test]
+fn documented_factors_and_comparison_precision_are_explicit() {
+    assert_eq!(EMPIRICAL_COORDINATE_POINTS_PER_UNIT, 72.0 / 742.0);
+    assert_eq!(EMPIRICAL_PLACEMENT_TOLERANCE_POINTS, 0.00005);
+}
+
+#[test]
+fn page_extents_predict_independent_wine_device_boundaries() {
+    // Literal white-page extents observed in original fixed-geometry controls.
+    // The last three square dimensions were withheld from factor selection.
+    for (width, height, expected_width, expected_height) in [
+        (4736, 2800, [460.0, 613.0, 919.0], [272.0, 362.0, 543.0]),
+        (5105, 2800, [495.0, 660.0, 991.0], [272.0, 362.0, 543.0]),
+        (5166, 2800, [501.0, 668.0, 1003.0], [272.0, 362.0, 543.0]),
+        (5168, 2800, [501.0, 669.0, 1003.0], [272.0, 362.0, 543.0]),
+        (2973, 2973, [288.0, 385.0, 577.0], [288.0, 385.0, 577.0]),
+        (4038, 4038, [392.0, 522.0, 784.0], [392.0, 522.0, 784.0]),
+        (5150, 5150, [500.0, 666.0, 999.0], [500.0, 666.0, 999.0]),
+    ] {
+        let size = source_page_geometry([width, height]).unwrap().size;
+        for ((zoom, width), height) in [0.75, 1.0, 1.5]
+            .into_iter()
+            .zip(expected_width)
+            .zip(expected_height)
+        {
+            for (points, observed) in [(size.width_points, width), (size.height_points, height)] {
+                assert_eq!((points * (96.0 / 72.0) * zoom).round(), observed);
+            }
+        }
+    }
+}
+
+#[test]
+fn mode_zero_extents_match_independent_wine_controls_and_held_out_dimensions() {
+    // White-page dimensions from fixed 96-dpi Wine controls, excluding the
+    // independently measured four horizontal/five vertical border pixels.
+    for (width, height, zoom, expected) in [
+        (2500, 2300, 0.75, [253.0, 233.0]),
+        (2500, 2300, 1.0, [337.0, 311.0]),
+        (2500, 2300, 1.5, [505.0, 466.0]),
+        (3100, 3400, 0.75, [311.0, 340.0]),
+        (3100, 3400, 1.0, [414.0, 453.0]),
+        (3100, 3400, 1.5, [622.0, 680.0]),
+        (5105, 4200, 0.75, [505.0, 418.0]),
+        (5105, 4200, 1.0, [674.0, 557.0]),
+        (5105, 4200, 1.5, [1011.0, 835.0]),
+        (4736, 2800, 1.0, [626.0, 376.0]), // Held out before observations.
+    ] {
+        let size = mode_zero_page_geometry([width, height]).unwrap().size;
+        for (points, pixels) in [size.width_points, size.height_points]
+            .into_iter()
+            .zip(expected)
+        {
+            assert_eq!((points * (96.0 / 72.0) * zoom).round(), pixels);
+        }
+    }
+    assert!(mode_zero_page_geometry([0, 100]).is_err());
+}
+
+#[test]
+fn image_dimensions_round_the_exact_point_ratio_once() {
+    let page = empirical_page_from_pixels(2071, 153, [0.0; 2]).unwrap();
+    // Predetermined decimal physical dimensions catch the extra rounding
+    // from multiplying the binary approximation of 0.24. That older result
+    // serializes as 497.03999999999996 and changes full-page edge pixels.
+    assert_eq!(page.size.width_points, 497.04);
+    assert_eq!(page.size.height_points, 36.72);
+    assert_ne!(page.size.width_points, 2071.0 * 0.24);
+    let transform = empirical_image_transform(page, 2071, 153, point(0, 0)).unwrap();
+    assert_eq!(transform, [497.04, 0.0, 0.0, -36.72, 0.0, 36.72]);
+    // The whole public unsigned dimension range keeps the numerator exact.
+    let largest = empirical_page_from_pixels(u32::MAX, u32::MAX, [0.0; 2]).unwrap();
+    assert_eq!(largest.size.width_points, 1_030_792_150.8);
+    assert_eq!(largest.size.height_points, 1_030_792_150.8);
+}
+
+#[test]
+fn fractional_negative_pdf_origin_and_off_page_translation_are_preserved() {
+    let page = page();
+    assert_eq!(
+        page.size,
+        PageSpec {
+            width_points: 24.0,
+            height_points: 60.0
+        }
+    );
+    assert_eq!(page.media_box().unwrap(), [-3.25, 1.125, 20.75, 61.125]);
+    let ctm = empirical_image_transform(page, 3, 7, point(742, 742)).unwrap();
+    close(ctm[0], 0.72);
+    assert_eq!(&ctm[1..3], &[0.0, 0.0]);
+    close(ctm[3], -1.68);
+    assert_eq!(&ctm[4..], &[68.75, -10.875]);
+    // The image is outside both page axes. Its source origin is not clipped.
+    assert!(ctm[4] > page.media_box().unwrap()[2]);
+    assert!(ctm[5] < page.media_box().unwrap()[1]);
+}
+
+#[test]
+fn zero_origin_is_top_left_and_positive_y_moves_downward() {
+    let page = empirical_page_from_pixels(50, 100, [0.0, 0.0]).unwrap();
+    let top = empirical_image_transform(page, 50, 100, point(0, 0)).unwrap();
+    assert_eq!(top, [12.0, 0.0, 0.0, -24.0, 0.0, 24.0]);
+    let moved = empirical_image_transform(page, 50, 100, point(1, 1)).unwrap();
+    close(moved[4], 72.0 / 742.0);
+    close(moved[5], 24.0 - 72.0 / 742.0);
+    assert_eq!(&top[..4], &moved[..4]);
+    // Coordinates remain unrounded; four-decimal precision is a comparison
+    // policy, rather than a loss of precision during field evaluation.
+    assert_ne!(moved[4], (moved[4] * 10_000.0).round() / 10_000.0);
+}
+
+#[test]
+fn source_order_repeats_and_pixel_dimensions_do_not_change_coordinate_roles() {
+    let page = page();
+    let coordinates = [point(2, 4), point(7, 3), point(2, 4)];
+    let transforms =
+        coordinates.map(|coordinate| empirical_image_transform(page, 3, 7, coordinate).unwrap());
+    assert_eq!(transforms[0], transforms[2]);
+    assert!(transforms[1][4] > transforms[0][4]);
+    assert!(transforms[1][5] > transforms[0][5]);
+    let resized = empirical_image_transform(page, 11, 2, coordinates[0]).unwrap();
+    // Compare returned binary64 values, not x87 extended intermediates.
+    // Independently rounded exact coordinates are -13/4 + 144/742 and
+    // 489/8 - 288/742. Pixel dimensions must not change either translation.
+    for transform in [transforms[0], transforms[2], resized] {
+        assert_eq!(transform[4].to_bits(), 0xc008728b62ac81ba);
+        assert_eq!(transform[5].to_bits(), 0x404e5e516c559037);
+    }
+    close(resized[0], 2.64);
+    close(resized[3], -0.48);
+}
+
+#[test]
+fn positive_pixel_range_has_no_integer_product_or_float_overflow() {
+    let page = empirical_page_from_pixels(u32::MAX, u32::MAX, [0.0; 2]).unwrap();
+    assert_eq!(page.size.width_points, f64::from(u32::MAX) * 0.24);
+    let ctm = empirical_image_transform(page, u32::MAX, u32::MAX, point(1, 2)).unwrap();
+    assert!(ctm.into_iter().all(f64::is_finite));
+    for (width, height) in [(0, 1), (1, 0), (0, 0)] {
+        assert!(matches!(
+            empirical_page_from_pixels(width, height, [0.0; 2]),
+            Err(Error {
+                kind: ErrorKind::Malformed,
+                ..
+            })
+        ));
+        assert!(matches!(
+            empirical_image_transform(page, width, height, point(0, 0)),
+            Err(Error {
+                kind: ErrorKind::Malformed,
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn forged_page_origins_sizes_overflow_and_precision_collapse_are_rejected() {
+    let valid = page();
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for origin in [[value, 0.0], [0.0, value]] {
+            assert!(matches!(
+                empirical_page_from_pixels(1, 1, origin),
+                Err(Error {
+                    kind: ErrorKind::Malformed,
+                    ..
+                })
+            ));
+        }
+    }
+    for value in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for size in [
+            PageSpec {
+                width_points: value,
+                ..valid.size
+            },
+            PageSpec {
+                height_points: value,
+                ..valid.size
+            },
+        ] {
+            let bad = EmpiricalPageGeometry { size, ..valid };
+            assert!(matches!(
+                bad.media_box(),
+                Err(Error {
+                    kind: ErrorKind::Malformed,
+                    ..
+                })
+            ));
+            assert!(matches!(
+                empirical_image_transform(bad, 1, 1, point(0, 0)),
+                Err(Error {
+                    kind: ErrorKind::Malformed,
+                    ..
+                })
+            ));
+        }
+    }
+    for (origin_points, size) in [
+        (
+            [f64::MAX, 0.0],
+            PageSpec {
+                width_points: f64::MAX,
+                height_points: 1.0,
+            },
+        ),
+        (
+            [0.0, f64::MAX],
+            PageSpec {
+                width_points: 1.0,
+                height_points: f64::MAX,
+            },
+        ),
+        (
+            [f64::MAX, 0.0],
+            PageSpec {
+                width_points: 1.0,
+                height_points: 1.0,
+            },
+        ),
+        (
+            [0.0, f64::MAX],
+            PageSpec {
+                width_points: 1.0,
+                height_points: 1.0,
+            },
+        ),
+    ] {
+        let bad = EmpiricalPageGeometry {
+            origin_points,
+            size,
+        };
+        assert!(matches!(
+            bad.media_box(),
+            Err(Error {
+                kind: ErrorKind::Malformed,
+                ..
+            })
+        ));
+    }
+}
+
+#[test]
+fn noncollapsed_extreme_origins_must_preserve_dimension_and_coordinate_precision() {
+    for page in [
+        EmpiricalPageGeometry {
+            origin_points: [1.0e18, 0.0],
+            size: PageSpec {
+                width_points: 1000.0,
+                height_points: 24.0,
+            },
+        },
+        EmpiricalPageGeometry {
+            origin_points: [0.0, 1.0e18],
+            size: PageSpec {
+                width_points: 24.0,
+                height_points: 1000.0,
+            },
+        },
+    ] {
+        assert!(matches!(
+            page.media_box(),
+            Err(Error {
+                kind: ErrorKind::Malformed,
+                reason: "empirical PDF origin cannot preserve the page dimension precision",
+                ..
+            })
+        ));
+    }
+    for (page, coordinate) in [
+        (
+            EmpiricalPageGeometry {
+                origin_points: [1.0e18, 0.0],
+                size: PageSpec {
+                    width_points: 1024.0,
+                    height_points: 24.0,
+                },
+            },
+            point(1, 0),
+        ),
+        (
+            EmpiricalPageGeometry {
+                origin_points: [0.0, 1.0e18],
+                size: PageSpec {
+                    width_points: 24.0,
+                    height_points: 1024.0,
+                },
+            },
+            point(0, 1),
+        ),
+    ] {
+        assert!(page.media_box().is_ok());
+        assert!(matches!(
+            empirical_image_transform(page, 1, 1, coordinate),
+            Err(Error {
+                kind: ErrorKind::Malformed,
+                reason: "empirical PDF origin cannot preserve the selected coordinate precision",
+                ..
+            })
+        ));
+        // An exact zero offset still has its intended meaning at that origin.
+        assert!(empirical_image_transform(page, 1, 1, point(0, 0)).is_ok());
+    }
+}
+
+#[test]
+fn page_and_offset_rounding_must_not_accumulate_beyond_translation_tolerance() {
+    let page = empirical_page_from_pixels(1, 9, [0.0, 274_877_906_944.0]).unwrap();
+    let [_, bottom, _, top] = page.media_box().unwrap();
+    let offset = 14.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT;
+    let rounded_y = top - offset;
+    assert!(
+        ((top - bottom) - page.size.height_points).abs() <= EMPIRICAL_PLACEMENT_TOLERANCE_POINTS
+    );
+    assert!(((top - rounded_y) - offset).abs() <= EMPIRICAL_PLACEMENT_TOLERANCE_POINTS);
+    assert!(
+        ((rounded_y - bottom) - (page.size.height_points - offset)).abs()
+            > EMPIRICAL_PLACEMENT_TOLERANCE_POINTS
+    );
+    match empirical_image_transform(page, 1, 1, point(0, 14)) {
+        // x87 may retain enough intermediate precision to avoid the two
+        // accumulated binary64 rounding errors demonstrated above. Accept
+        // success only for the one binary64 y within the existing tolerance
+        // of the exact result: 2^38 + 54/25 - 1008/742. Its neighbors miss by
+        // -0.0000567972435142 and +0.0000652730689858 points respectively.
+        Ok(ctm) => assert_eq!(ctm[5].to_bits(), 0x4250_0000_0000_334c),
+        Err(error) => assert!(matches!(
+            error,
+            Error {
+                kind: ErrorKind::Malformed,
+                reason: "empirical PDF origin cannot preserve the selected coordinate precision",
+                ..
+            }
+        )),
+    }
+}
+
+#[test]
+fn full_raw_word_domain_is_unsigned_and_preserves_off_page_positions() {
+    let page = page();
+    for coordinate in [
+        point(0, 0),
+        point(32767, 32767),
+        point(32768, 0),
+        point(0, 32768),
+        point(u16::MAX, u16::MAX),
+    ] {
+        let ctm = empirical_image_transform(page, 1, 1, coordinate).unwrap();
+        close(ctm[4], -3.25 + f64::from(coordinate.x) * 72.0 / 742.0);
+        close(ctm[5], 61.125 - f64::from(coordinate.y) * 72.0 / 742.0);
+        if coordinate.x >= 32768 {
+            assert!(ctm[4] > page.media_box().unwrap()[2]);
+        }
+        if coordinate.y >= 32768 {
+            assert!(ctm[5] < page.media_box().unwrap()[1]);
+        }
+    }
+}
+
+fn point(x: u16, y: u16) -> RawTextCoordinate {
+    RawTextCoordinate {
+        x,
+        y,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn c8_glyph_sizes_predict_independent_original_controls() {
+    let origin = [4652, 4274];
+    for (field, expected_pixels) in [
+        (2, 318),
+        (3, 352),
+        (4, 397),
+        (5, 477),
+        (6, 545),
+        (7, 636),
+        (8, 715),
+    ] {
+        let style = 0x1000 | field << 5 | field;
+        let cjk = native_glyph_transform(
+            page(),
+            origin,
+            [4672, 4294],
+            style,
+            C8GlyphClass::Cjk,
+            [None; 2],
+        )
+        .unwrap();
+        let latin = native_glyph_transform(
+            page(),
+            origin,
+            [4672, 4294],
+            style,
+            C8GlyphClass::Latin,
+            [None; 2],
+        )
+        .unwrap();
+        // Original square fonts, 96 DPI, displayed 3420%. Field 7 was held out
+        // from model calibration. These are measurements, not size-table copies.
+        assert_eq!(
+            (cjk[3] * 96.0 / 72.0 * 34.2).floor(),
+            f64::from(expected_pixels)
+        );
+        assert_eq!(cjk[..4], latin[..4]);
+        assert!(latin[4] > cjk[4]);
+        assert!(latin[5] < cjk[5]);
+        let shifted = native_glyph_transform(
+            page(),
+            [4672, 4294],
+            [4692, 4314],
+            style,
+            C8GlyphClass::Cjk,
+            [None; 2],
+        )
+        .unwrap();
+        assert_eq!(shifted, cjk);
+    }
+    // Independent horizontal/vertical fields preserve each axis's size.
+    let matrix = native_glyph_transform(
+        page(),
+        origin,
+        [4672, 4294],
+        0x1065,
+        C8GlyphClass::Cjk,
+        [None; 2],
+    )
+    .unwrap();
+    assert!(matrix[0] < matrix[3]);
+    close(matrix[0], 7.724252491694352);
+    close(matrix[3], 10.465116279069768);
+}
+
+#[test]
+fn c8_glyph_origins_are_signed_and_unknown_styles_are_errors() {
+    let origin = [4652, 4274];
+    let a = native_glyph_transform(
+        page(),
+        origin,
+        [4652, 4274],
+        0x1084,
+        C8GlyphClass::Cjk,
+        [None; 2],
+    )
+    .unwrap();
+    let b = native_glyph_transform(
+        page(),
+        origin,
+        [4632, 4254],
+        0x1084,
+        C8GlyphClass::Cjk,
+        [None; 2],
+    )
+    .unwrap();
+    close(b[4] - a[4], -20.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT);
+    close(b[5] - a[5], 20.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT);
+    for style in [
+        0x0485, 0x9c85, 0x1485, 0x04c5, 0x14c5, 0x14a4, 0x9084, 0x1004, 0x1080, 0x1024, 0x108b,
+    ] {
+        assert!(
+            native_glyph_transform(page(), origin, origin, style, C8GlyphClass::Cjk, [None; 2])
+                .is_err()
+        );
+    }
+    let mut invalid = page();
+    invalid.size.height_points = f64::NAN;
+    assert!(
+        native_glyph_transform(
+            invalid,
+            origin,
+            origin,
+            0x1084,
+            C8GlyphClass::Cjk,
+            [None; 2]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn mode_two_digit_origins_predict_independent_wine_controls() {
+    let geometry = source_page_geometry([1360, 1200]).unwrap();
+    let top = geometry.media_box().unwrap()[3];
+    // Literal full-em geometric ink bounds from Wine at 600%, with both
+    // ordinary and alternate resources. The digit top does not depend on em.
+    for (style, axes, position, observed) in [
+        (0x1084, [None; 2], [5802, 4904], [908.0, 490.0, 69.0]),
+        (0x10a4, [None; 2], [5802, 4904], [908.0, 490.0, 69.0]),
+        (0x1084, [Some(43); 2], [5802, 4904], [908.0, 490.0, 85.0]),
+    ] {
+        let m = native_digit_transform(geometry, [4652, 4274], position, style, axes).unwrap();
+        // Font/device rounding remains separate: the continuous outline must
+        // fall within one device pixel of the observed origin, not the old
+        // alphabet origin (8–10 px right and 5–7 px up in these controls).
+        assert!((m[4] * 8.0 - observed[0]).abs() < 1.0);
+        assert!(((top - m[5] - m[3]) * 8.0 - observed[1]).abs() < 1.0);
+        assert_eq!((m[3] * 8.0).floor(), observed[2]);
+    }
+    // Retain Latin admission; CJK-only axes/styles must not become digit
+    // support merely because the observed horizontal origins agree.
+    for (style, axes) in [(0x1084, [Some(1); 2]), (0x154a, [None; 2])] {
+        assert!(native_digit_transform(geometry, [0; 2], [0; 2], style, axes).is_err());
+    }
+}
+
+#[test]
+fn c8_horizontal_decoration_preserves_partial_marks_and_independent_axes() {
+    let page = source_page_geometry([600, 600]).unwrap();
+    let origin = [4652, 4274];
+    for (length, count) in [(10, 1), (50, 1), (89, 1), (91, 2), (180, 3), (430, 5)] {
+        let d = empirical_c8_horizontal_decoration(
+            page,
+            origin,
+            [[4712, 4334], [4712 + length, 4334]],
+            0x1084,
+            [None; 2],
+        )
+        .unwrap();
+        // Counts independently observed at 486% and 993%, including partial tails.
+        assert_eq!(d.glyph_count, count);
+        close(d.first_glyph[4], 5.822102425876011);
+        close(d.first_glyph[5], 48.038456716605026);
+        close(
+            d.clip[2],
+            f64::from(length) * EMPIRICAL_COORDINATE_POINTS_PER_UNIT,
+        );
+        assert_eq!(d.clip[1], 0.0);
+        assert_eq!(d.clip[3], page.size.height_points);
+    }
+    let a = empirical_c8_horizontal_decoration(
+        page,
+        origin,
+        [[4712, 4334], [5142, 4334]],
+        0x1048,
+        [None; 2],
+    )
+    .unwrap();
+    let b = empirical_c8_horizontal_decoration(
+        page,
+        origin,
+        [[4712, 4334], [5142, 4334]],
+        0x1102,
+        [None; 2],
+    )
+    .unwrap();
+    assert!(a.first_glyph[0] < b.first_glyph[0]);
+    assert!(a.first_glyph[3] > b.first_glyph[3]);
+    assert!(a.glyph_count > b.glyph_count);
+    assert_eq!(a.clip, b.clip);
+    let shifted = empirical_c8_horizontal_decoration(
+        page,
+        [4672, 4294],
+        [[4732, 4354], [5162, 4354]],
+        0x1048,
+        [None; 2],
+    )
+    .unwrap();
+    assert_eq!(a, shifted);
+    let maximum = empirical_c8_horizontal_decoration(
+        page,
+        origin,
+        [[0, 0], [u16::MAX, 0]],
+        0x1042,
+        [None; 2],
+    )
+    .unwrap();
+    assert!(maximum.first_glyph[4] < 0.0);
+    assert!(maximum.glyph_count < 1000);
+}
+
+#[test]
+fn c8_horizontal_decoration_rejects_unverified_geometry_and_styles() {
+    for points in [
+        [[1, 1], [1, 1]],
+        [[2, 1], [1, 1]],
+        [[1, 1], [1, 2]],
+        [[1, 1], [2, 2]],
+    ] {
+        assert!(
+            empirical_c8_horizontal_decoration(page(), [0, 0], points, 0x1084, [None; 2]).is_err()
+        );
+    }
+    assert!(
+        empirical_c8_horizontal_decoration(page(), [0, 0], [[0, 0], [1, 0]], 0x1080, [None; 2])
+            .is_err()
+    );
+    let mut invalid = page();
+    invalid.size.width_points = f64::NAN;
+    assert!(
+        empirical_c8_horizontal_decoration(invalid, [0, 0], [[0, 0], [1, 0]], 0x1084, [None; 2])
+            .is_err()
+    );
+}
+
+#[test]
+fn c8_segments_reproduce_independent_axes_and_preserve_endpoint_order() {
+    let page = source_page_geometry([600, 600]).unwrap();
+    for style in [0xa380, 0xa381, 0xa382, 0xa383, 0xa38b] {
+        let horizontal =
+            empirical_c8_segment(page, [4652, 4274], [[4682, 4304], [4832, 4304]], style).unwrap();
+        // Original segment-axes control: relative endpoints (30,30)/(180,30).
+        close(horizontal[0][0], 3600.0 / 742.0);
+        close(horizontal[1][0], 14400.0 / 742.0);
+        close(horizontal[0][1], 39600.0 / 742.0);
+        assert_eq!(horizontal[0][1], horizontal[1][1]);
+        let reverse =
+            empirical_c8_segment(page, [4652, 4274], [[4832, 4304], [4682, 4304]], style).unwrap();
+        assert_eq!(reverse, [horizontal[1], horizontal[0]]);
+        let vertical =
+            empirical_c8_segment(page, [4652, 4274], [[4902, 4524], [4902, 4704]], style).unwrap();
+        assert_eq!(vertical[0][0], vertical[1][0]);
+        assert!(vertical[0][1] > vertical[1][1]);
+        let shifted =
+            empirical_c8_segment(page, [4672, 4294], [[4702, 4324], [4852, 4324]], style).unwrap();
+        assert_eq!(shifted, horizontal);
+    }
+    let off_page =
+        empirical_c8_segment(page, [100, 100], [[0, 0], [u16::MAX, u16::MAX]], 0xa381).unwrap();
+    assert!(off_page[0][0] < 0.0);
+    assert!(off_page[1][1] < 0.0);
+    for style in [0xa384, 0xa386, 1] {
+        assert!(empirical_c8_segment(page, [0, 0], [[0, 0], [1, 1]], style).is_err());
+    }
+    let mut invalid = page;
+    invalid.origin_points[0] = f64::INFINITY;
+    assert!(empirical_c8_segment(invalid, [0, 0], [[0, 0], [1, 1]], 0xa381).is_err());
+}
+
+#[test]
+fn observed_glyph_style_prefixes_share_geometry_without_admitting_other_records() {
+    for field in [2, 8] {
+        for class in [C8GlyphClass::Cjk, C8GlyphClass::Latin] {
+            let style = 0x1000 | field << 5 | field;
+            let expected =
+                native_glyph_transform(page(), [4652, 4274], [4672, 4294], style, class, [None; 2])
+                    .unwrap();
+            for flags in [0x0800, 0x0c00] {
+                let actual = native_glyph_transform(
+                    page(),
+                    [4652, 4274],
+                    [4672, 4294],
+                    flags | field << 5 | field,
+                    class,
+                    [None; 2],
+                )
+                .unwrap();
+                // i586 may retain x87 intermediate precision across the two
+                // evaluations. Compare arithmetic with the existing point-scale
+                // tolerance; this is not a source-raster fidelity tolerance.
+                for (actual, expected) in actual.into_iter().zip(expected) {
+                    close(actual, expected);
+                }
+            }
+        }
+    }
+    // The independent glyph controls do not admit these decoration states.
+    assert!(
+        empirical_c8_horizontal_decoration(page(), [0, 0], [[0, 0], [100, 0]], 0x0884, [None; 2])
+            .is_err()
+    );
+}
+
+#[test]
+fn independently_controlled_variants_preserve_both_glyph_classes() {
+    for (reference, styles) in [
+        (0x10e7, &[0x04e7, 0x14e7][..]),
+        (0x1084, &[0x0484, 0x1484, 0x9c84][..]),
+        (0x10c6, &[0x04c6, 0x14c6][..]),
+        (0x10a5, &[0x14a5][..]),
+    ] {
+        for class in [C8GlyphClass::Cjk, C8GlyphClass::Latin] {
+            let expected = native_glyph_transform(
+                page(),
+                [4652, 4274],
+                [5200, 4700],
+                reference,
+                class,
+                [None; 2],
+            )
+            .unwrap();
+            for &style in styles {
+                let actual = native_glyph_transform(
+                    page(),
+                    [4652, 4274],
+                    [5200, 4700],
+                    style,
+                    class,
+                    [None; 2],
+                )
+                .unwrap();
+                for (actual, expected) in actual.into_iter().zip(expected) {
+                    close(actual, expected);
+                }
+                assert!(
+                    empirical_c8_horizontal_decoration(
+                        page(),
+                        [0, 0],
+                        [[0, 0], [100, 0]],
+                        style,
+                        [None; 2]
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn large_cjk_control_uses_verified_em_and_existing_signed_origin() {
+    for (style, expected_em) in [(0xe58c, 27.159468438538206), (0x154a, 20.930232558139537)] {
+        let actual = native_glyph_transform(
+            page(),
+            [4652, 4274],
+            [4672, 4294],
+            style,
+            C8GlyphClass::Cjk,
+            [None; 2],
+        )
+        .unwrap();
+        close(actual[0], expected_em);
+        close(actual[3], expected_em);
+        close(
+            actual[4],
+            page().origin_points[0] + 40.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT,
+        );
+        let shifted = native_glyph_transform(
+            page(),
+            [4672, 4294],
+            [4692, 4314],
+            style,
+            C8GlyphClass::Cjk,
+            [None; 2],
+        )
+        .unwrap();
+        assert_eq!(actual, shifted);
+        assert!(
+            native_glyph_transform(
+                page(),
+                [0, 0],
+                [0, 0],
+                style,
+                C8GlyphClass::Latin,
+                [None; 2]
+            )
+            .is_err()
+        );
+    }
+    for style in [0x118c, 0xe58b, 0xe56c] {
+        assert!(
+            native_glyph_transform(page(), [0, 0], [0, 0], style, C8GlyphClass::Cjk, [None; 2])
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn a385_line_marker_preserves_independently_checked_endpoints() {
+    for points in [[[4757, 4800], [6300, 4800]], [[4690, 4350], [4900, 4500]]] {
+        let expected = empirical_c8_segment(page(), [4652, 4274], points, 0xa381).unwrap();
+        let mut marked = points;
+        marked[0][0] |= 0xc000;
+        // x87 targets may retain different intermediate precision. Use the
+        // existing point tolerance, as for the other geometry controls.
+        for input in [points, marked] {
+            let actual = empirical_c8_segment(page(), [4652, 4274], input, 0xa385).unwrap();
+            for (actual, expected) in actual
+                .into_iter()
+                .flatten()
+                .zip(expected.into_iter().flatten())
+            {
+                close(actual, expected);
+            }
+        }
+        assert_ne!(
+            empirical_c8_segment(page(), [4652, 4274], marked, 0xa381).unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn mode_zero_geometry_uses_its_measured_origins_and_size_zero() {
+    let page = source_page_geometry([700, 500]).unwrap();
+    let unit = EMPIRICAL_COORDINATE_POINTS_PER_UNIT;
+    for (style, class, size, baseline) in [
+        (0x1084, C8GlyphClass::Cjk, 35.0, 0.0),
+        (0x1084, C8GlyphClass::Latin, 35.0, 10.0),
+        (0, C8GlyphClass::Cjk, 21.0, 0.0),
+        (0x1000, C8GlyphClass::Latin, 21.0, 10.0),
+        (0x154a, C8GlyphClass::Cjk, 84.0, 0.0),
+    ] {
+        let m =
+            mode_zero_glyph_transform(page, [30, 41], [100, 140], style, class, [None; 2]).unwrap();
+        close(m[0], size * 75.0 / 301.0);
+        close(m[3], size * 75.0 / 301.0);
+        close(m[4], 90.0 * unit);
+        close(m[5], (401.0 - baseline) * unit - size * 75.0 / 301.0);
+    }
+    let bad_page = EmpiricalPageGeometry {
+        origin_points: [f64::NAN, 0.0],
+        ..page
+    };
+    assert!(
+        mode_zero_glyph_transform(bad_page, [0; 2], [100; 2], 0, C8GlyphClass::Cjk, [None; 2])
+            .is_err()
+    );
+    assert!(
+        mode_zero_glyph_transform(
+            page,
+            [0; 2],
+            [100; 2],
+            0x154a,
+            C8GlyphClass::Latin,
+            [None; 2]
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn mode_zero_digits_have_measured_height_specific_offsets() {
+    let page = source_page_geometry([300, 300]).unwrap();
+    let unit = EMPIRICAL_COORDINATE_POINTS_PER_UNIT;
+    for (style, axes, em, raw_x, raw_y) in [
+        (0x1000, [None; 2], 21.0, 19.0, 64.0),
+        (0x1084, [None; 2], 35.0, 18.0, 67.0),
+        (0x10a5, [None; 2], 42.0, 18.0, 69.0),
+        (0, [Some(36); 2], 36.0, 18.0, 67.0),
+    ] {
+        let m = mode_zero_digit_transform(page, [0, 1], [20, 50], style, axes).unwrap();
+        close(m[0], em * 75.0 / 301.0);
+        close(m[3], em * 75.0 / 301.0);
+        close(m[4], raw_x * unit);
+        close(m[5], (300.0 - raw_y) * unit - em * 75.0 / 301.0);
+    }
+    for (style, axes) in [
+        (0x154a, [None; 2]),
+        (0x1084, [Some(36), None]),
+        (0xe58c, [Some(36); 2]),
+    ] {
+        assert!(mode_zero_digit_transform(page, [0; 2], [20, 50], style, axes).is_err());
+    }
+}
+
+#[test]
+fn four_unit_axes_preserve_measured_em_and_latin_baseline() {
+    let cjk = native_glyph_transform(
+        page(),
+        [4652, 4274],
+        [4672, 4334],
+        0x1084,
+        C8GlyphClass::Cjk,
+        [Some(4); 2],
+    )
+    .unwrap();
+    let latin = native_glyph_transform(
+        page(),
+        [4652, 4274],
+        [4672, 4334],
+        0x10a5,
+        C8GlyphClass::Latin,
+        [Some(4); 2],
+    )
+    .unwrap();
+    close(cjk[0], 4.0 * 75.0 / 301.0);
+    close(cjk[3], cjk[0]);
+    close(latin[0], cjk[0]);
+    close(latin[3], cjk[3]);
+    close(latin[4] - cjk[4], cjk[0] / 8.0);
+    close(
+        cjk[5] - latin[5],
+        15.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT,
+    );
+}
+
+#[test]
+fn small_field_glyph_controls_preserve_independent_axes_and_latin_baseline() {
+    let page = empirical_page_from_pixels(200, 200, [0.0; 2]).unwrap();
+    for (style, width, height, offset) in [
+        (0x1000, 21.0, 21.0, 11.0),
+        (0x1001, 21.0, 24.0, 10.0),
+        (0x1020, 24.0, 21.0, 11.0),
+        (0x1021, 24.0, 24.0, 10.0),
+        (0x1129, 72.0, 72.0, -1.0),
+        (0x1022, 24.0, 28.0, 9.0),
+        (0x1041, 28.0, 24.0, 10.0),
+    ] {
+        let cjk = native_glyph_transform(
+            page,
+            [4652, 4274],
+            [4672, 4334],
+            style,
+            C8GlyphClass::Cjk,
+            [None; 2],
+        )
+        .unwrap();
+        let latin = native_glyph_transform(
+            page,
+            [4652, 4274],
+            [4672, 4334],
+            style,
+            C8GlyphClass::Latin,
+            [None; 2],
+        )
+        .unwrap();
+        close(cjk[0], width * 75.0 / 301.0);
+        close(cjk[3], height * 75.0 / 301.0);
+        close(latin[4] - cjk[4], cjk[0] / 8.0);
+        close(
+            cjk[5] - latin[5],
+            offset * EMPIRICAL_COORDINATE_POINTS_PER_UNIT,
+        );
+        assert!(
+            empirical_c8_horizontal_decoration(
+                page,
+                [4652, 4274],
+                [[4672, 4334], [4752, 4334]],
+                style,
+                [None; 2]
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn nju_title_matches_measured_95_without_inferring_neighboring_styles() {
+    let p = page();
+    let m = native_glyph_transform(
+        p,
+        [4652, 4274],
+        [4672, 4334],
+        0x096b,
+        C8GlyphClass::Cjk,
+        [None; 2],
+    )
+    .unwrap();
+    close(m[0], 7125.0 / 301.0);
+    close(m[3], 7125.0 / 301.0);
+    close(
+        m[4],
+        p.origin_points[0] + 40.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT,
+    );
+    close(
+        m[5],
+        p.origin_points[1] + p.size.height_points
+            - 45.0 * EMPIRICAL_COORDINATE_POINTS_PER_UNIT
+            - 7125.0 / 301.0,
+    );
+    for style in [0x096a, 0x098b, 0x116b] {
+        assert!(
+            native_glyph_transform(p, [0; 2], [0; 2], style, C8GlyphClass::Cjk, [None; 2]).is_err()
+        );
+    }
+    assert!(
+        native_glyph_transform(p, [0; 2], [0; 2], 0x096b, C8GlyphClass::Latin, [None; 2]).is_err()
+    );
+}
+
+#[test]
+fn mode_two_alphabet_origins_match_independent_integer_measurements() {
+    let geometry = source_page_geometry([210, 188]).unwrap();
+    let top = geometry.media_box().unwrap()[3];
+    let unit = EMPIRICAL_COORDINATE_POINTS_PER_UNIT;
+    // Literal integer origins recovered from all 52 separate Wine pages at
+    // 5000/4000%. The shifted, reversed alternate-font pages independently
+    // predict the same origins. Font advances are identical in these probes.
+    for (style, axes, y_offset, measured_x) in [
+        (
+            0x1084,
+            [None; 2],
+            8.0,
+            [
+                31, 31, 31, 31, 34, 31, 31, 31, 43, 43, 31, 34, 27, 31, 31, 32, 31, 31, 35, 31, 28,
+                28, 21, 30, 30, 32, 41, 38, 41, 38, 41, 43, 38, 38, 47, 47, 38, 47, 25, 39, 39, 38,
+                38, 45, 43, 45, 39, 36, 30, 38, 38, 38,
+            ],
+        ),
+        (
+            0x10a4,
+            [None; 2],
+            8.0,
+            [
+                33, 33, 33, 33, 36, 33, 33, 33, 48, 48, 33, 36, 28, 33, 33, 35, 33, 33, 38, 33, 30,
+                30, 22, 31, 31, 35, 45, 41, 45, 41, 45, 48, 41, 41, 53, 53, 41, 53, 27, 43, 43, 41,
+                41, 50, 48, 50, 43, 40, 31, 41, 41, 41,
+            ],
+        ),
+        (
+            0x1084,
+            [Some(43); 2],
+            10.0,
+            [
+                33, 33, 33, 33, 37, 33, 33, 33, 49, 49, 33, 37, 28, 33, 33, 35, 33, 33, 38, 33, 30,
+                30, 22, 32, 32, 35, 45, 42, 45, 42, 45, 49, 42, 42, 54, 54, 42, 54, 27, 44, 44, 42,
+                42, 50, 49, 50, 44, 40, 32, 42, 42, 42,
+            ],
+        ),
+    ] {
+        for (character, observed_x) in (b'A'..=b'Z').chain(b'a'..=b'z').zip(measured_x) {
+            let m = native_letter_transform(
+                geometry,
+                [4652, 4274],
+                [4667, 4309],
+                style,
+                axes,
+                0xa080 + u16::from(character),
+            )
+            .unwrap();
+            close(m[4], (15.0 + f64::from(observed_x)) * unit);
+            close(m[5], top - (35.0 - y_offset) * unit - m[3]);
+        }
+    }
+    for code in [0xa0b0, 0xa0db, 0xa0e0, 0xa3c1] {
+        assert!(
+            native_letter_transform(geometry, [0; 2], [0; 2], 0x1084, [None; 2], code).is_err()
+        );
+    }
+    for (style, axes) in [(0x1084, [Some(1); 2]), (0x154a, [None; 2])] {
+        assert!(native_letter_transform(geometry, [0; 2], [0; 2], style, axes, 0xa0c1).is_err());
+    }
+}

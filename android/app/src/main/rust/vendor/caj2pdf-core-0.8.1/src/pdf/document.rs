@@ -1,0 +1,1174 @@
+// SPDX-License-Identifier: MIT
+
+//! Bounded page and outline assembly over the forward-only PDF writer.
+
+mod links;
+pub(crate) use links::LinkAnnotation;
+mod text;
+pub use text::{ContentPageWriter, FontObject};
+
+use super::outline::{BookmarkView, OutlineBuilder, write_utf16_hex};
+use super::writer::{MAX_PDF_INTEGER, ObjectId, PdfWriter};
+use crate::fallible::{len_u64, reserve, reserve_exact, usize_from_u32};
+use crate::{
+    Bookmark, BookmarkVisitor, Cancellation, ConversionReport, CountingSource, Error, Limits,
+    RangedSource, Result, read_exact_at,
+};
+use flate2::{Compress, Compression, FlushCompress, Status};
+use std::fmt::Write as _;
+use std::io::Write;
+
+// Conservative reservation for flate2's locked miniz_oxide Rust backend:
+// fixed dictionary, code buffer, local output buffer and Huffman tables.
+// Re-audit when changing the backend; this is not a document-size allocation.
+const DEFLATE_RESERVATION_BYTES: u64 = 512 * 1024;
+const DEFLATE_CHUNK_BYTES: usize = 16 * 1024;
+const PAGE_TREE_FANOUT: usize = 256;
+const MAX_TREE_PAGES: u64 = (PAGE_TREE_FANOUT as u64).pow(3);
+const MAX_PAGE_POINTS: f64 = 14_400.0;
+const MIN_PAGE_POINTS: f64 = 0.000_001;
+const LEAF_CHILDREN: &str = "PDF page-tree leaf children";
+const MIDDLE_CHILDREN: &str = "PDF page-tree middle children";
+const ROOT_CHILDREN: &str = "PDF page-tree root children";
+
+/// Maximum draws accepted by [`PdfDocument::add_placed_page`].
+///
+/// This bounds validation and page-emission work independently of the caller's
+/// slice size. The legacy [`PdfDocument::add_page`] keeps its existing limits.
+pub const MAX_PAGE_IMAGE_PLACEMENTS: usize = 8192;
+
+/// A page's visible size in PDF points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageSpec {
+    pub width_points: f64,
+    pub height_points: f64,
+}
+
+/// The narrow image formats emitted by this writer.
+///
+/// JPEG bytes are passed through unchanged; callers must supply a valid JPEG
+/// with the declared dimensions and color space. Raw bytes are checked against
+/// their exact expected length before any image output is written.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ImageEncoding {
+    Gray8,
+    Rgb8,
+    JpegGray8,
+    JpegRgb8,
+}
+
+/// One image XObject placed on a page.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ImageSpec {
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+    pub encoding: ImageEncoding,
+}
+
+#[derive(Debug)]
+struct PageNode {
+    id: ObjectId,
+    parent: ObjectId,
+    children: Vec<ObjectId>,
+    page_count: u32,
+}
+
+/// A 1 bit-per-component image whose rows the caller streams in order.
+///
+/// Each supplied row has `row_stride` bytes and is packed most significant
+/// bit first. Only its first `ceil(pixel_width / 8)` bytes enter the PDF;
+/// the remaining bytes are source row padding and are dropped, so a DIB
+/// 32-bit-aligned row can be passed unchanged. Unused low bits of the last
+/// kept byte are PDF row padding, which readers ignore. The first supplied
+/// row is the top of the image. A set bit is black and a clear bit is white:
+/// the XObject is `/DeviceGray` with `/BitsPerComponent 1` and
+/// `/Decode [1 0]`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BilevelImageSpec {
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+    pub row_stride: usize,
+}
+
+/// A completely written image XObject that can be reused on pages with
+/// [`PdfDocument::add_page`] or [`PdfDocument::add_placed_page`].
+///
+/// It is valid only in the document that wrote it. No image registry or
+/// image payload is retained by a handle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ImageObject {
+    object: ObjectId,
+    bilevel: bool,
+}
+
+/// One image draw with the PDF affine matrix `[a, b, c, d, e, f]`.
+///
+/// The matrix maps the image's unit square to page coordinates in PDF points:
+/// `x' = a*x + c*y + e`, `y' = b*x + d*y + f`. Negative components, rotation,
+/// shear, fractional translations and off-page content are allowed. Each
+/// component must be finite and have magnitude at most `i32::MAX`.
+/// Zero/singular matrices are allowed and may produce no visible pixels;
+/// the writer neither substitutes a transform nor reverses image rows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ImagePlacement {
+    pub image: ImageObject,
+    pub transform: [f64; 6],
+}
+
+#[derive(Clone, Copy)]
+enum PageImages<'p> {
+    Full(&'p [ImageObject]),
+    Placed(&'p [ImagePlacement]),
+}
+
+impl PageImages<'_> {
+    fn len(self) -> usize {
+        match self {
+            Self::Full(images) => images.len(),
+            Self::Placed(placements) => placements.len(),
+        }
+    }
+
+    fn image(self, index: usize) -> ImageObject {
+        match self {
+            Self::Full(images) => images[index],
+            Self::Placed(placements) => placements[index].image,
+        }
+    }
+}
+
+/// Streams one bilevel image's rows into an open PDF image stream.
+///
+/// Obtain it from [`PdfDocument::begin_bilevel_image`], write exactly
+/// `row_stride * pixel_height` bytes through [`Write::write`], then
+/// call [`BilevelImageWriter::finish`]. Writes may split or join rows. Only
+/// row-position state and a fixed-size zlib encoder are retained. Visible row
+/// bytes are compressed incrementally; storage padding is omitted. Dropping
+/// the writer before `finish` leaves the document's stream open, so every
+/// later document operation fails.
+pub struct BilevelImageWriter<'d, 'a, W: Write, C: Cancellation> {
+    document: &'d mut PdfDocument<'a, W, C>,
+    object: ObjectId,
+    visible: usize,
+    stride: usize,
+    column: usize,
+    remaining: u64,
+    zlib: Zlib,
+    failed: bool,
+}
+
+/// Fixed-size zlib state that compresses into the writer's open stream.
+pub(super) struct Zlib {
+    encoder: Compress,
+    encoded: Vec<u8>,
+}
+
+impl Zlib {
+    /// Reserve the compressor state and one output chunk.
+    pub(super) fn new(limits: &Limits) -> Result<Self> {
+        limits.check_allocation(DEFLATE_RESERVATION_BYTES)?;
+        let mut encoded = Vec::new();
+        let chunk = limits.io_chunk_bytes.min(DEFLATE_CHUNK_BYTES);
+        let refused = limits.allocation_refused("zlib compression output", chunk as u64);
+        reserve_exact(&mut encoded, chunk, refused)?;
+        encoded.resize(chunk, 0);
+        Ok(Self {
+            encoder: Compress::new(Compression::default(), true),
+            encoded,
+        })
+    }
+
+    /// Compress `input`, and with `finish` end the zlib stream. Compression
+    /// can consume input before a later output write fails, so a failed call
+    /// cannot be retried; callers must abandon their stream.
+    pub(super) fn write<W: Write, C: Cancellation>(
+        &mut self,
+        writer: &mut PdfWriter<'_, W, C>,
+        mut input: &[u8],
+        finish: bool,
+    ) -> Result<()> {
+        let flush = if finish {
+            FlushCompress::Finish
+        } else {
+            FlushCompress::None
+        };
+        loop {
+            // Also checks cancellation for empty writes and while draining.
+            writer.write_stream_bytes(&[])?;
+            if input.is_empty() && !finish {
+                return Ok(());
+            }
+            let before_in = self.encoder.total_in();
+            let before_out = self.encoder.total_out();
+            let count = input.len().min(DEFLATE_CHUNK_BYTES);
+            let status = self
+                .encoder
+                .compress(&input[..count], &mut self.encoded, flush)
+                .map_err(|_| Error::invalid("zlib compression failed"))?;
+            let consumed = (self.encoder.total_in() - before_in) as usize;
+            let produced = (self.encoder.total_out() - before_out) as usize;
+            writer.write_stream_bytes(&self.encoded[..produced])?;
+            input = &input[consumed..];
+            if status == Status::StreamEnd || (!finish && input.is_empty()) {
+                return Ok(());
+            }
+            if consumed == 0 && produced == 0 {
+                return Err(Error::invalid("zlib compression made no progress"));
+            }
+        }
+    }
+}
+
+impl<W: Write, C: Cancellation> Write for BilevelImageWriter<'_, '_, W, C> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if len_u64(bytes.len()) > self.remaining {
+            return Err(Error::invalid("bilevel image rows exceed the declared height").into());
+        }
+        let mut done = 0;
+        while done < bytes.len() {
+            let row_left = self.stride - self.column;
+            let count = row_left.min(bytes.len() - done);
+            let kept = count.min(self.visible.saturating_sub(self.column));
+            // Padding-only chunks still pass an empty slice, so a failed
+            // writer or cancellation is reported for them too.
+            self.encode(&bytes[done..done + kept], false)?;
+            // Account for the bytes only after the document accepted them.
+            self.column = (self.column + count) % self.stride;
+            self.remaining -= len_u64(count);
+            done += count;
+        }
+        Ok(bytes.len())
+    }
+
+    /// Does not force a deflate boundary. `finish` drains the encoder, and
+    /// [`PdfDocument::finish`] flushes the document sink.
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+const DEFLATE_PENDING_BYTES: usize = 4096;
+
+/// A [`Zlib`] stream that gathers small writes into fixed chunks first, so
+/// many tiny draws or table entries cost few compressor and sink calls.
+/// A document keeps one and resets it for each stream.
+pub(super) struct Deflate {
+    zlib: Zlib,
+    pending: Vec<u8>,
+}
+
+impl Deflate {
+    pub(super) fn new(limits: &Limits) -> Result<Self> {
+        let zlib = Zlib::new(limits)?;
+        let mut pending = Vec::new();
+        let refused = limits.allocation_refused("zlib input buffer", DEFLATE_PENDING_BYTES as u64);
+        reserve_exact(&mut pending, DEFLATE_PENDING_BYTES, refused)?;
+        Ok(Self { zlib, pending })
+    }
+
+    /// Gather `bytes`, compressing whenever the buffer fills. Output errors
+    /// are therefore reported by a later call, at the latest by `finish`.
+    pub(super) fn put<W: Write, C: Cancellation>(
+        &mut self,
+        writer: &mut PdfWriter<'_, W, C>,
+        mut bytes: &[u8],
+    ) -> Result<()> {
+        while !bytes.is_empty() {
+            let count = bytes.len().min(DEFLATE_PENDING_BYTES - self.pending.len());
+            self.pending.extend_from_slice(&bytes[..count]);
+            bytes = &bytes[count..];
+            if self.pending.len() == DEFLATE_PENDING_BYTES {
+                self.zlib.write(writer, &self.pending, false)?;
+                self.pending.clear();
+            }
+        }
+        Ok(())
+    }
+
+    /// Compress gathered bytes, end the zlib stream and reset for another.
+    pub(super) fn finish<W: Write, C: Cancellation>(
+        &mut self,
+        writer: &mut PdfWriter<'_, W, C>,
+    ) -> Result<()> {
+        self.zlib.write(writer, &self.pending, true)?;
+        // Ready for the next stream; a failed stream drops its Deflate.
+        self.zlib.encoder.reset();
+        self.pending.clear();
+        Ok(())
+    }
+}
+
+impl<W: Write, C: Cancellation> BilevelImageWriter<'_, '_, W, C> {
+    fn encode(&mut self, input: &[u8], finish: bool) -> Result<()> {
+        if self.failed {
+            return Err(Error::invalid(
+                "bilevel image cannot continue after compression or output failure",
+            ));
+        }
+        self.failed = true;
+        self.zlib.write(&mut self.document.writer, input, finish)?;
+        self.failed = false;
+        Ok(())
+    }
+
+    /// Close the image stream after exactly the declared rows were written.
+    pub fn finish(mut self) -> Result<ImageObject> {
+        if self.remaining != 0 {
+            return Err(Error::invalid(
+                "bilevel image ended before its declared height",
+            ));
+        }
+        self.encode(&[], true)?;
+        self.document.writer.end_stream()?;
+        Ok(ImageObject {
+            object: self.object,
+            bilevel: true,
+        })
+    }
+}
+
+const OVERREAD: &str = "image source reported more bytes than requested";
+
+/// Build PDF pages and outline items without retaining image or PDF payloads.
+///
+/// Pages are emitted as they arrive. The writer retains one page object ID per
+/// page for outline destinations, at most one active group at each page-tree
+/// level, and one open outline item per active outline depth. A caller may
+/// add a bookmark only after its destination page has been emitted. A document
+/// with no pages is rejected by `finish`.
+pub struct PdfDocument<'a, W: Write, C: Cancellation> {
+    writer: PdfWriter<'a, W, C>,
+    limits: &'a Limits,
+    cancellation: &'a C,
+    catalog_id: ObjectId,
+    pages_root_id: ObjectId,
+    root_children: Vec<ObjectId>,
+    middle: Option<PageNode>,
+    leaf: Option<PageNode>,
+    page_ids: Vec<ObjectId>,
+    pages_written: u32,
+    substituted_glyphs: u64,
+    outline: OutlineBuilder<ObjectId>,
+    input_bytes_read: u64,
+    image_buffer: Vec<u8>,
+    fonts: Vec<text::PendingFont>,
+    /// Identity ToUnicode CMap shared by every embedded font.
+    to_unicode: Option<ObjectId>,
+    /// Compressor reused by content pages and font streams; absent until
+    /// first needed, and while a content page holds it.
+    deflate: Option<Deflate>,
+    /// New reusable-image/affine-page operations become unrecoverable once
+    /// emission starts and fails. Partial output must then be discarded.
+    image_page_failed: bool,
+}
+
+impl<'a, W: Write, C: Cancellation> PdfDocument<'a, W, C> {
+    /// Write the PDF header and reserve the catalog and Pages root.
+    pub fn new(sink: &'a mut W, limits: &'a Limits, cancellation: &'a C) -> Result<Self> {
+        limits.validate()?;
+        let mut writer = PdfWriter::new(sink, limits, cancellation)?;
+        let catalog_id = writer.reserve_object()?;
+        let pages_root_id = writer.reserve_object()?;
+        Ok(Self {
+            writer,
+            limits,
+            cancellation,
+            catalog_id,
+            pages_root_id,
+            root_children: Vec::new(),
+            middle: None,
+            leaf: None,
+            page_ids: Vec::new(),
+            pages_written: 0,
+            substituted_glyphs: 0,
+            outline: OutlineBuilder::new(),
+            input_bytes_read: 0,
+            image_buffer: Vec::new(),
+            fonts: Vec::new(),
+            to_unicode: None,
+            deflate: None,
+            image_page_failed: false,
+        })
+    }
+
+    /// Add one image that fills a new page, returning its zero-based page index.
+    ///
+    /// The input is read by checked ranges and never collected into a complete
+    /// image buffer. For reuse and explicit transforms, use [`Self::add_image`]
+    /// followed by [`Self::add_placed_page`].
+    pub fn add_image_page<R: RangedSource>(
+        &mut self,
+        source: &mut R,
+        offset: u64,
+        length: u64,
+        page: PageSpec,
+        image: ImageSpec,
+    ) -> Result<u32> {
+        self.ensure_image_page_intact()?;
+        let width = pdf_page_number(page.width_points)?;
+        let height = pdf_page_number(page.height_points)?;
+        image.validate(length)?;
+        validate_image_range(
+            self.limits,
+            self.input_bytes_read,
+            source.size(),
+            offset,
+            length,
+        )?;
+        self.check_next_page()?;
+        self.reserve_page_index_slot()?;
+        self.ensure_leaf()?;
+
+        let image_id = self.emit_image_xobject(source, offset, length, image)?;
+        self.push_page(
+            &width,
+            &height,
+            PageImages::Full(&[ImageObject {
+                object: image_id,
+                bilevel: false,
+            }]),
+        )
+    }
+
+    /// Stream one raw/JPEG image XObject without adding a page.
+    ///
+    /// Place the returned handle any number of times with [`Self::add_page`]
+    /// or [`Self::add_placed_page`]; reuse does not read or embed the bytes
+    /// again. Raw lengths, source ranges and cumulative ranged-image input
+    /// bytes are checked before emission. JPEG validity, dimensions and color
+    /// interpretation remain the caller's responsibility (see [`ImageEncoding`]).
+    /// One reused image buffer grows up to `Limits::io_chunk_bytes`; each
+    /// source request is at most the remaining length and that chunk ceiling.
+    ///
+    /// A preflight refusal leaves the output unchanged and permits a corrected
+    /// request. A failure once emission starts requires discarding the partial
+    /// PDF; every subsequent document operation, including `finish`, refuses.
+    pub fn add_image<R: RangedSource>(
+        &mut self,
+        source: &mut R,
+        offset: u64,
+        length: u64,
+        image: ImageSpec,
+    ) -> Result<ImageObject> {
+        self.ensure_image_page_intact()?;
+        image.validate(length)?;
+        validate_image_range(
+            self.limits,
+            self.input_bytes_read,
+            source.size(),
+            offset,
+            length,
+        )?;
+        // The range preflight has already checked this addition.
+        self.limits
+            .check_input_size(self.input_bytes_read + length)?;
+        self.writer.ensure_idle()?;
+        self.writer.prepare_objects(2)?;
+        self.image_page_failed = true;
+        let object = self.emit_image_xobject(source, offset, length, image)?;
+        self.image_page_failed = false;
+        Ok(ImageObject {
+            object,
+            bilevel: false,
+        })
+    }
+
+    /// Start a 1 bpp image XObject whose rows the caller streams.
+    ///
+    /// Dimensions, row stride, raw byte count and a 512 KiB compressor-state
+    /// reservation are checked before image output. Compressed bytes are written
+    /// sequentially with an indirect stream length. No page is added; place it with
+    /// [`PdfDocument::add_page`]. The image must be finished before any other
+    /// document operation.
+    pub fn begin_bilevel_image(
+        &mut self,
+        image: BilevelImageSpec,
+    ) -> Result<BilevelImageWriter<'_, 'a, W, C>> {
+        self.ensure_image_page_intact()?;
+        let (visible, remaining) = image.validate()?;
+        let zlib = Zlib::new(self.limits)?;
+        let object = self.writer.reserve_object()?;
+        let length_id = self.writer.reserve_object()?;
+        let dictionary = format!(
+            "/Type /XObject\n/Subtype /Image\n/Width {}\n/Height {}\n/ColorSpace /DeviceGray\n/BitsPerComponent 1\n/Decode [1 0]\n/Filter /FlateDecode\n",
+            image.pixel_width, image.pixel_height
+        );
+        self.writer
+            .begin_stream(object, length_id, dictionary.as_bytes())?;
+        Ok(BilevelImageWriter {
+            document: self,
+            object,
+            visible,
+            stride: image.row_stride,
+            column: 0,
+            remaining,
+            zlib,
+            failed: false,
+        })
+    }
+
+    /// Add a page showing previously finished images and return its zero-based
+    /// page index. Each image is scaled to fill the whole page, drawn in
+    /// slice order, so a later image paints over an earlier one.
+    pub fn add_page(&mut self, page: PageSpec, images: &[ImageObject]) -> Result<u32> {
+        self.ensure_image_page_intact()?;
+        if images.is_empty() {
+            return Err(Error::invalid("PDF page requires at least one image"));
+        }
+        let width = pdf_page_number(page.width_points)?;
+        let height = pdf_page_number(page.height_points)?;
+        self.check_next_page()?;
+        self.reserve_page_index_slot()?;
+        self.ensure_leaf()?;
+        self.push_page(&width, &height, PageImages::Full(images))
+    }
+
+    /// Add a page drawing reusable images in slice order with explicit CTMs.
+    ///
+    /// Each draw is isolated by `q`/`Q`, so transforms do not accumulate and
+    /// later images paint over earlier ones. Repeated handles reuse the same
+    /// XObject. See [`ImagePlacement`] for matrix and degenerate-transform
+    /// policy. Components use shortest round-trip decimal syntax, without
+    /// exponents or fixed-precision rounding; negative zero is written as zero.
+    /// Reader precision for extreme numbers is implementation dependent.
+    ///
+    /// An empty slice, more than [`MAX_PAGE_IMAGE_PLACEMENTS`] draws, invalid
+    /// dimensions/matrices or known page/object-index budget
+    /// refusals are rejected before page bytes are written, even at a page-tree
+    /// rollover. Validation and emission format one draw at a time, without
+    /// copying the caller's placement slice. Retained metadata is the same as
+    /// for [`Self::add_page`]. Actual allocation, I/O, sink or cancellation
+    /// failures after emission starts require discarding the partial PDF.
+    pub fn add_placed_page(
+        &mut self,
+        page: PageSpec,
+        placements: &[ImagePlacement],
+    ) -> Result<u32> {
+        self.ensure_image_page_intact()?;
+        if placements.is_empty() {
+            return Err(Error::invalid("PDF page requires at least one image"));
+        }
+        if placements.len() > MAX_PAGE_IMAGE_PLACEMENTS {
+            return Err(Error::limit(
+                "PDF image placements per page",
+                MAX_PAGE_IMAGE_PLACEMENTS as u64,
+                len_u64(placements.len()),
+            ));
+        }
+        let width = pdf_page_number(page.width_points)?;
+        let height = pdf_page_number(page.height_points)?;
+        for placement in placements {
+            decimals(&placement.transform)?;
+        }
+        self.writer.ensure_idle()?;
+        self.check_next_page()?;
+        self.reserve_page_index_slot()?;
+        self.prepare_page_objects()?;
+        self.image_page_failed = true;
+        self.ensure_leaf()?;
+        let index = self.push_page(&width, &height, PageImages::Placed(placements))?;
+        self.image_page_failed = false;
+        Ok(index)
+    }
+
+    fn prepare_page_objects(&mut self) -> Result<()> {
+        let new_leaf = self
+            .leaf
+            .as_ref()
+            .is_none_or(|leaf| leaf.children.len() == PAGE_TREE_FANOUT);
+        let new_middle = new_leaf
+            && self
+                .middle
+                .as_ref()
+                .is_none_or(|middle| middle.children.len() == PAGE_TREE_FANOUT);
+        // Reserve capacity, not object numbers: a refused request must not
+        // leave unwritten objects that would prevent a later corrected page.
+        self.writer
+            .prepare_objects(3 + usize::from(new_leaf) + usize::from(new_middle))?;
+        Ok(())
+    }
+
+    fn ensure_image_page_intact(&self) -> Result<()> {
+        if self.image_page_failed {
+            return Err(Error::invalid(
+                "PDF document cannot continue after a failed image or page operation",
+            ));
+        }
+        Ok(())
+    }
+
+    fn push_page(&mut self, width: &str, height: &str, images: PageImages<'_>) -> Result<u32> {
+        let parent = self
+            .leaf
+            .as_ref()
+            .ok_or(Error::invalid("PDF page-tree leaf is missing"))?
+            .id;
+        let page_id = self.emit_page(parent, width, height, images)?;
+        self.register_page(page_id)
+    }
+
+    fn register_page(&mut self, page_id: ObjectId) -> Result<u32> {
+        let leaf = self
+            .leaf
+            .as_mut()
+            .ok_or(Error::invalid("PDF page-tree leaf is missing"))?;
+        push_child(&mut leaf.children, page_id, self.limits, LEAF_CHILDREN)?;
+        leaf.page_count = leaf
+            .page_count
+            .checked_add(1)
+            .ok_or(Error::invalid("PDF leaf page count overflows"))?;
+        let middle = self
+            .middle
+            .as_mut()
+            .ok_or(Error::invalid("PDF page-tree middle node is missing"))?;
+        middle.page_count = middle
+            .page_count
+            .checked_add(1)
+            .ok_or(Error::invalid("PDF middle page count overflows"))?;
+        let page_index = self.pages_written;
+        self.pages_written = self
+            .pages_written
+            .checked_add(1)
+            .ok_or(Error::invalid("PDF page count overflows"))?;
+        self.page_ids.push(page_id);
+        Ok(page_index)
+    }
+
+    /// Add an outline item in preorder after its destination page is emitted.
+    ///
+    /// Depth starts at zero. Each new item may be a sibling, ancestor sibling,
+    /// or direct child; a jump over a missing parent is rejected. Completed
+    /// siblings and ancestors are written immediately, keeping only O(depth)
+    /// titles and links in memory.
+    ///
+    /// A failure after validation, once earlier items may have been closed,
+    /// makes later `add_bookmark` and `finish` calls fail.
+    pub fn add_bookmark(&mut self, bookmark: Bookmark) -> Result<()> {
+        self.add_bookmark_with_view(bookmark, BookmarkView::Fit)
+    }
+
+    /// Add an entry with an explicit view, retaining the same bounded outline state.
+    pub fn add_bookmark_with_view(&mut self, bookmark: Bookmark, view: BookmarkView) -> Result<()> {
+        self.ensure_image_page_intact()?;
+        self.outline.ensure_intact()?;
+        let destination = self
+            .page_ids
+            .get(bookmark.page_index as usize)
+            .copied()
+            .ok_or(Error::invalid(
+                "bookmark destination page has not been emitted",
+            ))?;
+        self.limits.check_bookmarks(
+            self.outline
+                .written()
+                .checked_add(1)
+                .ok_or(Error::invalid("bookmark count overflows"))?,
+        )?;
+        self.outline.add(
+            &mut self.writer,
+            self.limits,
+            usize_from_u32(bookmark.depth),
+            destination,
+            view,
+            bookmark.title,
+        )
+    }
+
+    /// Write the remaining page tree, outlines, catalog, xref, and trailer.
+    ///
+    /// Fails without writing if an earlier `add_bookmark` failed after it
+    /// began closing outline items.
+    pub fn finish(self) -> Result<ConversionReport> {
+        self.finish_with_info(&[])
+    }
+
+    /// Like [`Self::finish`], also writing a document information dictionary
+    /// with each present `(key, value)` as a UTF-16BE text string. Keys are
+    /// plain names of ASCII letters, digits and `_`. Without a present value,
+    /// no dictionary or trailer `/Info` entry is written.
+    pub fn finish_with_info(
+        mut self,
+        info: &[(&'static str, Option<&str>)],
+    ) -> Result<ConversionReport> {
+        if info.iter().any(|(key, _)| {
+            key.is_empty()
+                || !key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        }) {
+            return Err(Error::invalid("PDF Info key must be a plain ASCII name"));
+        }
+        self.ensure_image_page_intact()?;
+        self.outline.ensure_intact()?;
+        text::ensure_fonts_embedded(&self.fonts)?;
+        if self.pages_written == 0 {
+            return Err(Error::invalid("PDF document requires at least one page"));
+        }
+        self.close_page_tree()?;
+        let outline_root = self.outline.finish(&mut self.writer)?;
+
+        self.writer.begin_object(self.catalog_id)?;
+        self.writer.write_bytes(
+            format!(
+                "<< /Type /Catalog /Pages {} 0 R",
+                self.pages_root_id.number()
+            )
+            .as_bytes(),
+        )?;
+        if let Some(outline_root) = outline_root {
+            self.writer.write_bytes(
+                format!(
+                    " /Outlines {} 0 R /PageMode /UseOutlines",
+                    outline_root.number()
+                )
+                .as_bytes(),
+            )?;
+        }
+        self.writer.write_bytes(b" >>")?;
+        self.writer.end_object()?;
+
+        let info_id = if info.iter().any(|(_, value)| value.is_some()) {
+            let id = self.writer.reserve_object()?;
+            self.writer.begin_object(id)?;
+            self.writer.write_bytes(b"<<")?;
+            for (key, value) in info {
+                if let Some(value) = value {
+                    self.writer
+                        .write_bytes(format!(" /{key} <FEFF").as_bytes())?;
+                    write_utf16_hex(&mut self.writer, value)?;
+                    self.writer.write_bytes(b">")?;
+                }
+            }
+            self.writer.write_bytes(b" >>")?;
+            self.writer.end_object()?;
+            Some(id)
+        } else {
+            None
+        };
+        let output_bytes_written = self.writer.finish_with_info(self.catalog_id, info_id)?;
+        Ok(ConversionReport {
+            input_bytes_read: self.input_bytes_read,
+            output_bytes_written,
+            pages_converted: self.pages_written,
+            substituted_glyphs: self.substituted_glyphs,
+            bookmarks_written: self.outline.written(),
+            ..ConversionReport::default()
+        })
+    }
+
+    fn check_next_page(&self) -> Result<()> {
+        let next = self
+            .pages_written
+            .checked_add(1)
+            .ok_or(Error::invalid("PDF page count overflows"))?;
+        self.limits.check_pages(next)?;
+        if u64::from(next) > MAX_TREE_PAGES {
+            return Err(Error::limit(
+                "PDF page-tree capacity",
+                MAX_TREE_PAGES,
+                u64::from(next),
+            ));
+        }
+        Ok(())
+    }
+
+    fn reserve_page_index_slot(&mut self) -> Result<()> {
+        reserve_bounded(
+            &mut self.page_ids,
+            u64::from(self.limits.max_pages).min(MAX_TREE_PAGES),
+            self.limits,
+            "PDF page index allocation",
+        )
+    }
+
+    fn ensure_leaf(&mut self) -> Result<()> {
+        if self
+            .leaf
+            .as_ref()
+            .is_some_and(|leaf| leaf.children.len() < PAGE_TREE_FANOUT)
+        {
+            return Ok(());
+        }
+        if let Some(leaf) = self.leaf.take() {
+            self.emit_page_node(leaf)?;
+        }
+        if self
+            .middle
+            .as_ref()
+            .is_none_or(|middle| middle.children.len() == PAGE_TREE_FANOUT)
+        {
+            if let Some(middle) = self.middle.take() {
+                let id = middle.id;
+                self.emit_page_node(middle)?;
+                push_child(&mut self.root_children, id, self.limits, ROOT_CHILDREN)?;
+            }
+            let id = self.writer.reserve_object()?;
+            self.middle = Some(PageNode {
+                id,
+                parent: self.pages_root_id,
+                children: Vec::new(),
+                page_count: 0,
+            });
+        }
+        let middle = self
+            .middle
+            .as_mut()
+            .ok_or(Error::invalid("PDF page-tree middle node is missing"))?;
+        let id = self.writer.reserve_object()?;
+        push_child(&mut middle.children, id, self.limits, MIDDLE_CHILDREN)?;
+        self.leaf = Some(PageNode {
+            id,
+            parent: middle.id,
+            children: Vec::new(),
+            page_count: 0,
+        });
+        Ok(())
+    }
+
+    fn close_page_tree(&mut self) -> Result<()> {
+        if let Some(leaf) = self.leaf.take() {
+            self.emit_page_node(leaf)?;
+        }
+        if let Some(middle) = self.middle.take() {
+            let id = middle.id;
+            self.emit_page_node(middle)?;
+            push_child(&mut self.root_children, id, self.limits, ROOT_CHILDREN)?;
+        }
+        self.writer.begin_object(self.pages_root_id)?;
+        self.writer.write_bytes(
+            format!("<< /Type /Pages /Count {} /Kids [", self.pages_written).as_bytes(),
+        )?;
+        for child in &self.root_children {
+            self.writer
+                .write_bytes(format!(" {} 0 R", child.number()).as_bytes())?;
+        }
+        self.writer.write_bytes(b" ] >>")?;
+        self.writer.end_object()
+    }
+
+    fn emit_page_node(&mut self, node: PageNode) -> Result<()> {
+        self.writer.begin_object(node.id)?;
+        self.writer.write_bytes(
+            format!(
+                "<< /Type /Pages /Parent {} 0 R /Count {} /Kids [",
+                node.parent.number(),
+                node.page_count
+            )
+            .as_bytes(),
+        )?;
+        for child in node.children {
+            self.writer
+                .write_bytes(format!(" {} 0 R", child.number()).as_bytes())?;
+        }
+        self.writer.write_bytes(b" ] >>")?;
+        self.writer.end_object()
+    }
+
+    fn emit_image_xobject<R: RangedSource>(
+        &mut self,
+        source: &mut R,
+        offset: u64,
+        length: u64,
+        image: ImageSpec,
+    ) -> Result<ObjectId> {
+        let image_id = self.writer.reserve_object()?;
+        let length_id = self.writer.reserve_object()?;
+        let dictionary = image.dictionary();
+        self.writer
+            .begin_stream(image_id, length_id, dictionary.as_bytes())?;
+        self.copy_resource(source, offset, length)?;
+        self.writer.end_stream()?;
+        Ok(image_id)
+    }
+
+    fn copy_resource<R: RangedSource>(
+        &mut self,
+        source: &mut R,
+        offset: u64,
+        length: u64,
+    ) -> Result<()> {
+        let chunk_size = length.min(self.limits.io_chunk_bytes as u64) as usize;
+        if self.image_buffer.len() < chunk_size {
+            let refused = self
+                .limits
+                .allocation_refused("PDF resource I/O buffer", chunk_size as u64);
+            let additional = chunk_size - self.image_buffer.len();
+            reserve_exact(&mut self.image_buffer, additional, refused)?;
+            self.image_buffer.resize(chunk_size, 0);
+        }
+        let mut source =
+            CountingSource::new(source, &mut self.input_bytes_read).rejecting_overread(OVERREAD);
+        let mut done = 0_u64;
+        while done < length {
+            let chunk = (length - done).min(self.image_buffer.len() as u64) as usize;
+            let position = offset
+                .checked_add(done)
+                .ok_or(Error::invalid("resource range offset overflows"))?;
+            read_exact_at(
+                &mut source,
+                position,
+                &mut self.image_buffer[..chunk],
+                self.limits,
+                self.cancellation,
+            )?;
+            self.writer
+                .write_stream_bytes(&self.image_buffer[..chunk])?;
+            done = done
+                .checked_add(chunk as u64)
+                .ok_or(Error::invalid("resource input byte count overflows"))?;
+        }
+        Ok(())
+    }
+
+    fn emit_page(
+        &mut self,
+        parent: ObjectId,
+        width: &str,
+        height: &str,
+        images: PageImages<'_>,
+    ) -> Result<ObjectId> {
+        let content_id = self.writer.reserve_object()?;
+        let content_length_id = self.writer.reserve_object()?;
+        let page_id = self.writer.reserve_object()?;
+
+        self.writer
+            .begin_stream(content_id, content_length_id, b"")?;
+        for index in 0..images.len() {
+            match images {
+                PageImages::Full(_) => {
+                    self.writer.write_stream_bytes(
+                        format!("q\n{width} 0 0 {height} 0 0 cm\n/Im{index} Do\nQ\n").as_bytes(),
+                    )?;
+                }
+                PageImages::Placed(placements) => {
+                    let matrix = decimals(&placements[index].transform)?;
+                    self.writer.write_stream_bytes(
+                        format!("q\n{matrix} cm\n/Im{index} Do\nQ\n").as_bytes(),
+                    )?;
+                }
+            }
+        }
+        self.writer.end_stream()?;
+
+        self.writer.begin_object(page_id)?;
+        self.writer.write_bytes(format!("<< /Type /Page /Parent {} 0 R /MediaBox [0 0 {width} {height}] /Resources << /XObject <<", parent.number()).as_bytes())?;
+        for index in 0..images.len() {
+            let image = images.image(index);
+            self.writer
+                .write_bytes(format!(" /Im{index} {} 0 R", image.object.number()).as_bytes())?;
+        }
+        self.writer
+            .write_bytes(format!(" >> >> /Contents {} 0 R >>", content_id.number()).as_bytes())?;
+        self.writer.end_object()?;
+        Ok(page_id)
+    }
+}
+
+/// Check one image payload range. Only the source size is needed, so every
+/// sink, cancellation, and source type shares this check.
+fn validate_image_range(
+    limits: &Limits,
+    input_bytes_read: u64,
+    source_size: u64,
+    offset: u64,
+    length: u64,
+) -> Result<()> {
+    limits.check_input_size(source_size)?;
+    if length > MAX_PDF_INTEGER {
+        return Err(Error::limit(
+            "PDF image stream bytes",
+            MAX_PDF_INTEGER,
+            length,
+        ));
+    }
+    if offset > source_size {
+        return Err(Error::invalid("image range starts beyond source size"));
+    }
+    if length > source_size - offset {
+        return Err(Error::truncated(offset, length, source_size - offset));
+    }
+    input_bytes_read
+        .checked_add(length)
+        .ok_or(Error::invalid("image input byte count overflows"))?;
+    Ok(())
+}
+
+impl<W: Write, C: Cancellation> BookmarkVisitor for PdfDocument<'_, W, C> {
+    fn visit(&mut self, bookmark: Bookmark) -> Result<()> {
+        self.add_bookmark(bookmark)
+    }
+}
+
+impl ImageSpec {
+    fn validate(self, length: u64) -> Result<()> {
+        check_image_dimensions(self.pixel_width, self.pixel_height)?;
+        let channels = match self.encoding {
+            ImageEncoding::Gray8 | ImageEncoding::JpegGray8 => 1_u64,
+            ImageEncoding::Rgb8 | ImageEncoding::JpegRgb8 => 3_u64,
+        };
+        if matches!(self.encoding, ImageEncoding::Gray8 | ImageEncoding::Rgb8) {
+            let expected = u64::from(self.pixel_width)
+                .checked_mul(u64::from(self.pixel_height))
+                .and_then(|pixels| pixels.checked_mul(channels))
+                .ok_or(Error::invalid("raw image byte count overflows"))?;
+            if length != expected {
+                return Err(Error::invalid(
+                    "raw image byte count does not match dimensions",
+                ));
+            }
+        } else if length == 0 {
+            return Err(Error::invalid("JPEG image stream must not be empty"));
+        }
+        Ok(())
+    }
+
+    fn dictionary(self) -> String {
+        let color = match self.encoding {
+            ImageEncoding::Gray8 | ImageEncoding::JpegGray8 => "DeviceGray",
+            ImageEncoding::Rgb8 | ImageEncoding::JpegRgb8 => "DeviceRGB",
+        };
+        let filter = match self.encoding {
+            ImageEncoding::Gray8 | ImageEncoding::Rgb8 => "",
+            ImageEncoding::JpegGray8 | ImageEncoding::JpegRgb8 => "/Filter /DCTDecode\n",
+        };
+        // PDF 1.7 section 3.3.7 defaults to the YCbCr-to-RGB transform for
+        // three-component DCT data. State it explicitly for JFIF callers;
+        // callers must reject JPEGs with uncertain or conflicting color.
+        let decode_parms = match self.encoding {
+            ImageEncoding::JpegRgb8 => "/DecodeParms << /ColorTransform 1 >>\n",
+            _ => "",
+        };
+        format!(
+            "/Type /XObject\n/Subtype /Image\n/Width {}\n/Height {}\n/ColorSpace /{color}\n/BitsPerComponent 8\n{filter}{decode_parms}",
+            self.pixel_width, self.pixel_height
+        )
+    }
+}
+
+impl BilevelImageSpec {
+    /// Return the kept bytes per row and the total input bytes after
+    /// checking every PDF size.
+    fn validate(self) -> Result<(usize, u64)> {
+        check_image_dimensions(self.pixel_width, self.pixel_height)?;
+        let visible = self.pixel_width.div_ceil(8);
+        if len_u64(self.row_stride) < u64::from(visible) {
+            return Err(Error::invalid(
+                "bilevel row stride is shorter than the packed row",
+            ));
+        }
+        let stream = u64::from(visible) * u64::from(self.pixel_height);
+        if stream > MAX_PDF_INTEGER {
+            return Err(Error::limit(
+                "PDF image stream bytes",
+                MAX_PDF_INTEGER,
+                stream,
+            ));
+        }
+        let input = len_u64(self.row_stride)
+            .checked_mul(u64::from(self.pixel_height))
+            .ok_or(Error::invalid("bilevel input byte count overflows"))?;
+        Ok((visible as usize, input))
+    }
+}
+
+fn check_image_dimensions(width: u32, height: u32) -> Result<()> {
+    if width == 0 || height == 0 {
+        return Err(Error::invalid("image width and height must be nonzero"));
+    }
+    for (resource, value) in [("PDF image width", width), ("PDF image height", height)] {
+        if u64::from(value) > MAX_PDF_INTEGER {
+            return Err(Error::limit(resource, MAX_PDF_INTEGER, u64::from(value)));
+        }
+    }
+    Ok(())
+}
+
+fn pdf_page_number(value: f64) -> Result<String> {
+    if !value.is_finite() || !(MIN_PAGE_POINTS..=MAX_PAGE_POINTS).contains(&value) {
+        return Err(Error::invalid(
+            "page dimension must be finite and within 0.000001..=14400 points",
+        ));
+    }
+    Ok(format!("{value:.6}"))
+}
+
+/// Space-separated content-stream numbers in shortest round-trip decimal
+/// syntax, writing negative zero as zero. Each value must be finite with
+/// magnitude at most `i32::MAX`.
+fn decimals(values: &[f64]) -> Result<String> {
+    let mut text = String::new();
+    for value in values {
+        if !value.is_finite() || value.abs() > MAX_PDF_INTEGER as f64 {
+            return Err(Error::invalid(
+                "PDF matrix components must be finite with magnitude at most 2147483647",
+            ));
+        }
+        let value = if *value == 0.0 { 0.0 } else { *value };
+        let separator = if text.is_empty() { "" } else { " " };
+        // Formatting into a `String` cannot fail.
+        let _ = write!(text, "{separator}{value}");
+    }
+    Ok(text)
+}
+
+/// Append `child` to a page-tree node's kids, of which there are at most
+/// [`PAGE_TREE_FANOUT`].
+///
+/// A node never holds more kids than pages were written, and every page
+/// first reserved its slot in the page index of the same element type, so
+/// the item and byte ceilings already passed; only an allocator refusal
+/// fails here.
+fn push_child(
+    children: &mut Vec<ObjectId>,
+    child: ObjectId,
+    limits: &Limits,
+    resource: &'static str,
+) -> Result<()> {
+    reserve_bounded(children, PAGE_TREE_FANOUT as u64, limits, resource)?;
+    children.push(child);
+    Ok(())
+}
+
+pub(super) fn reserve_bounded<T>(
+    values: &mut Vec<T>,
+    maximum_items: u64,
+    limits: &Limits,
+    resource: &'static str,
+) -> Result<()> {
+    let needed = values
+        .len()
+        .checked_add(1)
+        .ok_or(Error::invalid("PDF index count overflows address space"))?;
+    let needed_u64 = len_u64(needed);
+    if needed_u64 > maximum_items {
+        return Err(Error::limit(resource, maximum_items, needed_u64));
+    }
+    let element_bytes = len_u64(size_of::<T>().max(1));
+    let needed_bytes = needed_u64
+        .checked_mul(element_bytes)
+        .ok_or(Error::invalid("PDF index allocation overflows 64 bits"))?;
+    limits.check_allocation(needed_bytes)?;
+    if needed <= values.capacity() {
+        return Ok(());
+    }
+    let doubled = values.capacity().max(1).saturating_mul(2);
+    let proposed = doubled.max(needed);
+    let maximum = usize::try_from(maximum_items).unwrap_or(usize::MAX);
+    let by_bytes =
+        usize::try_from(limits.max_allocation_bytes / element_bytes).unwrap_or(usize::MAX);
+    let target = proposed.min(maximum).min(by_bytes);
+    let requested_bytes = u64::try_from(target)
+        .ok()
+        .and_then(|count| count.checked_mul(element_bytes))
+        .ok_or(Error::invalid("PDF index allocation overflows 64 bits"))?;
+    limits.check_allocation(requested_bytes)?;
+    let refused = limits.allocation_refused(resource, requested_bytes);
+    let additional = target - values.len();
+    reserve_exact(values, additional, refused)?;
+    // The limit covers the capacity requested here. Vec may receive extra
+    // capacity from its allocator, which is outside the handler's request.
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

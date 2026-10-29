@@ -1,0 +1,1321 @@
+// SPDX-License-Identifier: MIT
+
+//! Bounded reconstruction of indexed PDF object fragments.
+//!
+//! A format handler supplies the exact source span of every indirect object
+//! and the intended page order. This module never infers page order from
+//! object numbers or searches binary stream payloads for PDF delimiters.
+//! Each object is inspected once: a public plan is parsed here, and the CAJ
+//! converter passes the inspection its fragment scan already made.
+
+use super::input::{
+    FragmentInspection, FragmentKind, PlannedObject, finish_planned_object, parse_planned_object,
+};
+use super::outline::{
+    BookmarkView, MAX_OUTLINE_DEPTH, ObjectSink, OutlineItem, write_item, write_root,
+};
+use super::page_walk::{PageStep, PageWalk};
+use super::writer::{HEADER, MAX_PDF_OBJECTS, Output, checked_object_number};
+use super::xref::{Trailer, write_xref};
+use super::{PdfRange, PdfRef};
+use crate::fallible::{len_u64, reserve, reserve_exact, usize_from_u32};
+use crate::{
+    Bookmark, Cancellation, ConversionReport, CountingSource, Error, ErrorKind, Limits,
+    RangedSource, Result, read_exact_at,
+};
+use std::io::Write;
+use std::mem::size_of;
+
+/// The complete byte range of one generation-zero indirect object, from its
+/// `<number> 0 obj` header through its `endobj` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FragmentObject {
+    pub reference: PdfRef,
+    pub range: PdfRange,
+}
+
+/// An explicit, validated plan for rebuilding a classic-xref PDF.
+///
+/// `pages` is document order. When `pages_root` has no supplied object, every
+/// page must refer directly to this missing parent; a single `/Pages` node is
+/// synthesized. The catalog is always synthesized at the next available object
+/// number, and a supplied catalog object is rejected. An existing page tree
+/// root is retained only when its references are consistent with this plan.
+#[derive(Clone, Copy, Debug)]
+pub struct FragmentPlan<'a> {
+    pub objects: &'a [FragmentObject],
+    pub pages: &'a [PdfRef],
+    pub pages_root: PdfRef,
+}
+
+/// One planned object with its single structural inspection.
+pub(crate) struct InspectedObject {
+    pub object: FragmentObject,
+    pub inspection: FragmentInspection,
+}
+
+/// Append a generated replacement object to `suffix`, whose bytes follow a
+/// source of `base` bytes, and return its range.
+pub(crate) fn append_replacement(
+    suffix: &mut Vec<u8>,
+    base: u64,
+    bytes: &[u8],
+) -> Result<PdfRange> {
+    let offset = base
+        .checked_add(len_u64(suffix.len()))
+        .ok_or(Error::invalid("PDF replacement object offset overflows"))?;
+    let refused = Error::invalid("PDF replacement object allocation was refused");
+    reserve(suffix, bytes.len(), refused)?;
+    suffix.extend_from_slice(bytes);
+    Ok(PdfRange {
+        offset,
+        length: len_u64(bytes.len()),
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Record {
+    reference: PdfRef,
+    range: PdfRange,
+    output_offset: u64,
+    /// The position of this object in the supplied plan.
+    index: Option<usize>,
+    blank_media_box: Option<(usize, usize)>,
+}
+
+#[derive(Clone, Copy)]
+struct OutlineNode {
+    item: OutlineItem<PdfRef>,
+    parent_index: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ContentEvidenceKind {
+    Page { direct_array: bool },
+    ScalarArray,
+}
+
+#[derive(Debug)]
+struct ContentEvidence {
+    reference: PdfRef,
+    kind: ContentEvidenceKind,
+    references: Vec<PdfRef>,
+}
+
+const OVERREAD: &str = "PDF source reported more bytes than requested";
+
+impl Record {
+    fn synthetic(reference: PdfRef) -> Self {
+        Self {
+            reference,
+            range: PdfRange {
+                offset: 0,
+                length: 0,
+            },
+            output_offset: 0,
+            index: None,
+            blank_media_box: None,
+        }
+    }
+}
+
+fn pdf_error(
+    reference: Option<PdfRef>,
+    offset: u64,
+    kind: ErrorKind,
+    reason: &'static str,
+) -> Error {
+    Error::pdf(
+        kind,
+        offset,
+        reference.map(|r| (r.number, r.generation)),
+        reason,
+    )
+}
+
+fn malformed(reference: Option<PdfRef>, offset: u64, reason: &'static str) -> Error {
+    pdf_error(reference, offset, ErrorKind::Malformed, reason)
+}
+
+fn pdf_limit(
+    reference: Option<PdfRef>,
+    offset: u64,
+    resource: &'static str,
+    limit: u64,
+    attempted: u64,
+) -> Error {
+    Error::limit(resource, limit, attempted)
+        .at(offset)
+        .in_pdf(reference.map(|r| (r.number, r.generation)))
+}
+
+fn checked_add(left: u64, right: u64) -> Result<u64> {
+    left.checked_add(right)
+        .ok_or(Error::invalid("PDF arithmetic overflows 64 bits"))
+}
+
+/// Reserve room for `count` entries of an index whose length a count limit
+/// already bounds; an allocator refusal is a located limit error.
+fn reserve_index<T>(
+    items: &mut Vec<T>,
+    count: usize,
+    limits: &Limits,
+    resource: &'static str,
+) -> Result<()> {
+    let attempted = len_u64(count).saturating_mul(len_u64(size_of::<T>()));
+    reserve_exact(items, count, limits.allocation_refused(resource, attempted))
+}
+
+/// The object slots a reconstruction writes: the planned objects, two
+/// synthetic objects, and, with bookmarks, an outline root plus one item per
+/// bookmark. A count beyond the PDF object limit is located at the first
+/// planned object. It takes counts, not slices, so a test reaches the limit
+/// without building millions of objects.
+fn requested_objects(
+    object_count: usize,
+    bookmark_count: usize,
+    first: Option<&FragmentObject>,
+) -> Result<usize> {
+    let outline_objects = match bookmark_count {
+        0 => Some(0),
+        count => count.checked_add(1),
+    };
+    let requested = outline_objects
+        .and_then(|outline| object_count.checked_add(2)?.checked_add(outline))
+        .ok_or(Error::invalid("PDF object count overflows address space"))?;
+    let offset = first.map_or(0, |object| object.range.offset);
+    let reference = first.map(|object| (object.reference.number, object.reference.generation));
+    checked_object_number(requested).map_err(|error| error.at(offset).in_pdf(reference))?;
+    Ok(requested)
+}
+
+fn checked_reference(reference: PdfRef, offset: u64) -> Result<()> {
+    if reference.number == 0 {
+        return Err(malformed(
+            Some(reference),
+            offset,
+            "object zero cannot be referenced",
+        ));
+    }
+    if reference.number > MAX_PDF_OBJECTS {
+        return Err(pdf_limit(
+            Some(reference),
+            offset,
+            "PDF object number",
+            u64::from(MAX_PDF_OBJECTS),
+            u64::from(reference.number),
+        ));
+    }
+    if reference.generation != 0 {
+        return Err(pdf_error(
+            Some(reference),
+            offset,
+            ErrorKind::UnsupportedFormat,
+            "fragment reconstruction supports generation-zero objects only",
+        ));
+    }
+    Ok(())
+}
+
+fn object_index(records: &[Record], reference: PdfRef) -> Option<usize> {
+    records
+        .binary_search_by_key(&reference.number, |record| record.reference.number)
+        .ok()
+}
+
+fn build_outline_nodes(
+    bookmarks: &[Bookmark],
+    pages: &[PdfRef],
+    root: PdfRef,
+    limits: &Limits,
+) -> Result<(Vec<OutlineNode>, PdfRef, PdfRef)> {
+    let mut nodes: Vec<OutlineNode> = Vec::new();
+    reserve_index(
+        &mut nodes,
+        bookmarks.len(),
+        limits,
+        "PDF outline index allocation",
+    )?;
+    let mut stack: [Option<usize>; MAX_OUTLINE_DEPTH] = [None; MAX_OUTLINE_DEPTH];
+    let mut first_root = None;
+    let mut last_root: Option<usize> = None;
+    let mut previous_depth = 0;
+    for (index, bookmark) in bookmarks.iter().enumerate() {
+        let depth = usize_from_u32(bookmark.depth);
+        if depth >= MAX_OUTLINE_DEPTH {
+            return Err(pdf_limit(
+                None,
+                0,
+                "PDF outline depth",
+                MAX_OUTLINE_DEPTH as u64,
+                depth as u64 + 1,
+            ));
+        }
+        if index == 0 && depth != 0 || index != 0 && depth > previous_depth + 1 {
+            return Err(malformed(None, 0, "bookmark depth skips a parent"));
+        }
+        if bookmark.title.is_empty() {
+            return Err(malformed(None, 0, "bookmark title is empty"));
+        }
+        let failure = malformed(None, 0, "bookmark destination is outside the ordered pages");
+        let page = *pages.get(bookmark.page_index as usize).ok_or(failure)?;
+        let failure = pdf_limit(
+            Some(root),
+            0,
+            "PDF object number",
+            u64::from(MAX_PDF_OBJECTS),
+            u64::MAX,
+        );
+        let item_number = u32::try_from(index)
+            .ok()
+            .and_then(|position| position.checked_add(1))
+            .and_then(|position| root.number.checked_add(position))
+            .ok_or(failure)?;
+        let reference = PdfRef {
+            number: item_number,
+            generation: 0,
+        };
+        checked_reference(reference, 0)?;
+        let parent_index: Option<usize> = if depth == 0 {
+            None
+        } else {
+            Some(stack[depth - 1].ok_or(malformed(None, 0, "bookmark parent is missing"))?)
+        };
+        let previous_index = if let Some(parent_index) = parent_index {
+            nodes[parent_index].item.last_child
+        } else {
+            last_root.map(|previous| nodes[previous].item.reference)
+        };
+        let parent = parent_index.map_or(root, |parent_index| nodes[parent_index].item.reference);
+        nodes.push(OutlineNode {
+            item: OutlineItem::new(reference, parent, previous_index, page, BookmarkView::Xyz),
+            parent_index,
+        });
+        if let Some(previous) = previous_index {
+            let previous_position = previous
+                .number
+                .checked_sub(root.number)
+                .and_then(|difference| difference.checked_sub(1))
+                .and_then(|difference| usize::try_from(difference).ok())
+                .ok_or(Error::invalid("PDF outline sibling index overflows"))?;
+            nodes[previous_position].item.next = Some(reference);
+        }
+        if let Some(parent_index) = parent_index {
+            let parent = &mut nodes[parent_index].item;
+            parent.first_child.get_or_insert(reference);
+            parent.last_child = Some(reference);
+        } else {
+            first_root.get_or_insert(reference);
+            last_root = Some(index);
+        }
+        stack[depth] = Some(index);
+        previous_depth = depth;
+    }
+    for index in (0..nodes.len()).rev() {
+        if let Some(parent) = nodes[index].parent_index {
+            let subtree = nodes[index]
+                .item
+                .descendants
+                .checked_add(1)
+                .ok_or(Error::invalid("PDF outline descendant count overflows"))?;
+            let parent = &mut nodes[parent].item;
+            parent.descendants = parent
+                .descendants
+                .checked_add(subtree)
+                .ok_or(Error::invalid("PDF outline descendant count overflows"))?;
+        }
+    }
+    let first_root = first_root.ok_or(Error::invalid("PDF outline root has no first item"))?;
+    let last_root = nodes[last_root.ok_or(Error::invalid("PDF outline root has no last item"))?]
+        .item
+        .reference;
+    Ok((nodes, first_root, last_root))
+}
+
+/// Writes synthetic objects, recording each one's output offset for the
+/// cross-reference table.
+struct SyntheticObjects<'o, 'a, 'r, W: Write, C: Cancellation> {
+    out: &'o mut Output<'a, W, C>,
+    records: &'r mut [Record],
+}
+
+impl<W: Write, C: Cancellation> ObjectSink for SyntheticObjects<'_, '_, '_, W, C> {
+    type Ref = PdfRef;
+
+    fn begin_object(&mut self, reference: PdfRef) -> Result<()> {
+        let index = object_index(self.records, reference)
+            .ok_or(Error::invalid("synthetic PDF object was not indexed"))?;
+        self.records[index].output_offset = self.out.position;
+        self.out
+            .write(format!("{} {} obj\n", reference.number, reference.generation).as_bytes())
+    }
+
+    fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.out.write(bytes)
+    }
+
+    fn end_object(&mut self) -> Result<()> {
+        self.out.write(b"\nendobj\n")
+    }
+}
+
+/// Reconstruct one PDF from indexed indirect objects and explicit page order,
+/// with a CAJ outline in the same PDF revision.
+///
+/// All plan and source validation precedes the first sink write. A subsequent
+/// source, sink, or cancellation failure leaves a partial output and returns
+/// an error, never a successful report. Source object bytes are copied in
+/// bounded chunks without materializing a whole object or PDF in memory.
+///
+/// Bookmark entries are depth-first and name zero-based positions in
+/// `plan.pages`. All titles and links are checked before the first sink write;
+/// title hex is then emitted in bounded chunks.
+pub fn reconstruct_fragment_with_bookmarks<R: RangedSource, W: Write, C: Cancellation>(
+    source: &mut R,
+    sink: &mut W,
+    plan: &FragmentPlan<'_>,
+    bookmarks: &[Bookmark],
+    limits: &Limits,
+    cancellation: &C,
+) -> Result<ConversionReport> {
+    reconstruct(source, sink, plan, None, bookmarks, limits, cancellation)
+}
+
+/// A reconstruction plan whose objects the caller already inspected, such as
+/// the CAJ fragment scan's records and the generated objects that join them.
+pub(crate) struct InspectedPlan<'a> {
+    pub objects: Vec<InspectedObject>,
+    pub pages: &'a [PdfRef],
+    pub pages_root: PdfRef,
+    pub page_labels: Option<PdfRef>,
+}
+
+struct Inspections {
+    objects: Vec<Option<FragmentInspection>>,
+    page_labels: Option<PdfRef>,
+}
+
+/// Reconstruct from an [`InspectedPlan`] without parsing its objects again.
+pub(crate) fn reconstruct_inspected<R: RangedSource, W: Write, C: Cancellation>(
+    source: &mut R,
+    sink: &mut W,
+    plan: InspectedPlan<'_>,
+    bookmarks: &[Bookmark],
+    limits: &Limits,
+    cancellation: &C,
+) -> Result<ConversionReport> {
+    let mut spans = Vec::new();
+    reserve_index(
+        &mut spans,
+        plan.objects.len(),
+        limits,
+        "PDF object index allocation",
+    )?;
+    let mut inspections = Vec::new();
+    reserve_index(
+        &mut inspections,
+        plan.objects.len(),
+        limits,
+        "PDF object index allocation",
+    )?;
+    for object in plan.objects {
+        spans.push(object.object);
+        inspections.push(Some(object.inspection));
+    }
+    let fragment_plan = FragmentPlan {
+        objects: &spans,
+        pages: plan.pages,
+        pages_root: plan.pages_root,
+    };
+    let given = Some(Inspections {
+        objects: inspections,
+        page_labels: plan.page_labels,
+    });
+    reconstruct(
+        source,
+        sink,
+        &fragment_plan,
+        given,
+        bookmarks,
+        limits,
+        cancellation,
+    )
+}
+
+fn reconstruct<R: RangedSource, W: Write, C: Cancellation>(
+    source: &mut R,
+    sink: &mut W,
+    plan: &FragmentPlan<'_>,
+    given: Option<Inspections>,
+    bookmarks: &[Bookmark],
+    limits: &Limits,
+    cancellation: &C,
+) -> Result<ConversionReport> {
+    let mut input_bytes_read = 0;
+    let mut counted =
+        CountingSource::new(source, &mut input_bytes_read).rejecting_overread(OVERREAD);
+    let source = &mut counted;
+    limits.validate()?;
+    if len_u64(bookmarks.len()) > u64::from(limits.max_bookmarks) {
+        return Err(pdf_limit(
+            None,
+            0,
+            "bookmarks",
+            u64::from(limits.max_bookmarks),
+            len_u64(bookmarks.len()),
+        ));
+    }
+    // At most `max_bookmarks`, a `u32`.
+    let bookmark_count = bookmarks.len() as u32;
+    if len_u64(plan.pages.len()) > u64::from(limits.max_pages) {
+        let first = plan.pages.first().copied();
+        let offset = first
+            .and_then(|reference| {
+                plan.objects
+                    .iter()
+                    .find(|object| object.reference == reference)
+                    .map(|object| object.range.offset)
+            })
+            .unwrap_or(0);
+        return Err(pdf_limit(
+            first,
+            offset,
+            "pages",
+            u64::from(limits.max_pages),
+            len_u64(plan.pages.len()),
+        ));
+    }
+    // At most `max_pages`, a `u32`.
+    let page_count = plan.pages.len() as u32;
+    if page_count == 0 {
+        return Err(malformed(None, 0, "fragment has no pages"));
+    }
+    checked_reference(plan.pages_root, 0)?;
+    if cancellation.is_cancelled() {
+        return Err(crate::ErrorKind::Cancelled.into());
+    }
+
+    let requested = requested_objects(plan.objects.len(), bookmarks.len(), plan.objects.first())?;
+    let mut records = index_spans(source.size(), plan.objects, requested, limits)?;
+    for page in plan.pages {
+        checked_reference(*page, 0)?;
+        if object_index(&records, *page).is_none() {
+            return Err(malformed(Some(*page), 0, "ordered page object is missing"));
+        }
+    }
+    // Check duplicate destinations with a sorted page-ref index.
+    let mut sorted_pages = Vec::new();
+    reserve_index(
+        &mut sorted_pages,
+        plan.pages.len(),
+        limits,
+        "PDF page index allocation",
+    )?;
+    sorted_pages.extend_from_slice(plan.pages);
+    sorted_pages.sort_unstable();
+    for pair in sorted_pages.windows(2) {
+        if pair[0] == pair[1] {
+            return Err(pdf_error(
+                Some(pair[1]),
+                0,
+                ErrorKind::Malformed,
+                "ordered page object is repeated",
+            )
+            .ambiguous_repair());
+        }
+    }
+
+    let synthetic_pages = object_index(&records, plan.pages_root).is_none();
+    let largest = records.last().map_or(plan.pages_root.number, |record| {
+        record.reference.number.max(plan.pages_root.number)
+    });
+    // Every record and the pages root passed `checked_reference`, so
+    // `largest <= MAX_PDF_OBJECTS` and the successor fits `u32`.
+    let catalog = PdfRef {
+        number: largest + 1,
+        generation: 0,
+    };
+    checked_reference(catalog, 0)?;
+    if synthetic_pages {
+        records.push(Record::synthetic(plan.pages_root));
+    }
+    records.push(Record::synthetic(catalog));
+    records.sort_unstable_by_key(|record| record.reference.number);
+
+    let page_labels = given.as_ref().and_then(|g| g.page_labels);
+    if let Some(labels) = page_labels {
+        checked_reference(labels, 0)?;
+        if object_index(&records, labels).is_none_or(|i| records[i].range.length == 0) {
+            return Err(malformed(
+                Some(labels),
+                0,
+                "retained page-label tree is missing",
+            ));
+        }
+    }
+    // Validate framing, stream lengths, references, and page-tree structure
+    // against the supplied source spans before writing anything.
+    validate_fragment_structure(
+        source,
+        plan,
+        given.map(|g| g.objects),
+        &mut records,
+        &sorted_pages,
+        limits,
+        cancellation,
+    )?;
+    drop(sorted_pages);
+
+    let outline = if bookmarks.is_empty() {
+        None
+    } else {
+        let largest = records
+            .last()
+            .ok_or(Error::invalid("fragment has no PDF objects"))?;
+        // Every record passed `checked_reference`, so the successor fits.
+        let root = PdfRef {
+            number: largest.reference.number + 1,
+            generation: 0,
+        };
+        checked_reference(root, 0)?;
+        let (nodes, first, last) = build_outline_nodes(bookmarks, plan.pages, root, limits)?;
+        records.push(Record::synthetic(root));
+        for node in &nodes {
+            records.push(Record::synthetic(node.item.reference));
+        }
+        records.sort_unstable_by_key(|record| record.reference.number);
+        Some((root, nodes, first, last))
+    };
+
+    let pages_prefix = synthetic_pages.then(|| {
+        format!(
+            "{} 0 obj\n<< /Type /Pages /Count {} /Kids [",
+            plan.pages_root.number, page_count
+        )
+    });
+    let pages_suffix = b"] >>\nendobj\n";
+    let mut catalog_text = format!(
+        "{} 0 obj\n<< /Type /Catalog /Pages {} 0 R",
+        catalog.number, plan.pages_root.number
+    );
+    if let Some((outline_root, ..)) = &outline {
+        catalog_text.push_str(&format!(" /Outlines {} 0 R", outline_root.number));
+    }
+    if let Some(labels) = page_labels {
+        catalog_text.push_str(&format!(" /PageLabels {} 0 R", labels.number));
+    }
+    catalog_text.push_str(" >>\nendobj\n");
+
+    // `limits.validate` admitted one I/O chunk under the allocation limit.
+    let mut buffer = Vec::new();
+    let refused =
+        limits.allocation_refused("PDF I/O buffer allocation", len_u64(limits.io_chunk_bytes));
+    reserve_exact(&mut buffer, limits.io_chunk_bytes, refused)?;
+    buffer.resize(limits.io_chunk_bytes, 0_u8);
+    let mut out = Output::new(sink, limits, cancellation);
+    out.write(HEADER)?;
+    for record in records.iter_mut().filter(|record| record.range.length != 0) {
+        record.output_offset = out.position;
+        copy_object(source, &mut out, record, &mut buffer)?;
+        out.write(b"\n")?;
+    }
+    if let Some(prefix) = pages_prefix {
+        let index = object_index(&records, plan.pages_root)
+            .ok_or(Error::invalid("synthetic page tree root was not indexed"))?;
+        records[index].output_offset = out.position;
+        out.write(prefix.as_bytes())?;
+        buffer.clear();
+        for page in plan.pages {
+            let mut encoded = [0_u8; 16];
+            let bytes = page_reference(*page, &mut encoded);
+            if bytes.len() > limits.io_chunk_bytes {
+                out.write(&buffer)?;
+                buffer.clear();
+                out.write(bytes)?;
+                continue;
+            }
+            if buffer.len() + bytes.len() > limits.io_chunk_bytes {
+                out.write(&buffer)?;
+                buffer.clear();
+            }
+            buffer.extend_from_slice(bytes);
+        }
+        out.write(&buffer)?;
+        out.write(pages_suffix)?;
+    }
+    let index = object_index(&records, catalog)
+        .ok_or(Error::invalid("synthetic catalog was not indexed"))?;
+    records[index].output_offset = out.position;
+    out.write(catalog_text.as_bytes())?;
+    if let Some((root, nodes, first, last)) = &outline {
+        let mut objects = SyntheticObjects {
+            out: &mut out,
+            records: &mut records,
+        };
+        write_root(&mut objects, *root, *first, *last, bookmark_count)?;
+        for (bookmark, node) in bookmarks.iter().zip(nodes) {
+            write_item(&mut objects, &node.item, &bookmark.title)?;
+        }
+    }
+    let largest = records
+        .last()
+        .ok_or(Error::invalid("fragment has no PDF objects"))?
+        .reference
+        .number;
+    let trailer = Trailer {
+        size: u64::from(largest) + 1,
+        root: catalog,
+        prev: None,
+        info: None,
+        id: None,
+    };
+    let entries = records
+        .iter()
+        .map(|record| (record.reference, record.output_offset));
+    write_xref(&mut out, entries, true, &trailer)?;
+    out.flush()?;
+    Ok(ConversionReport {
+        input_bytes_read,
+        output_bytes_written: out.position,
+        pages_converted: page_count,
+        bookmarks_written: bookmark_count,
+        ..ConversionReport::default()
+    })
+}
+
+/// Check every planned span, then index the spans by object number with room
+/// for `requested` records. Spans must be nonempty, inside the source, within
+/// the input limit in total, disjoint, and uniquely numbered: the one place
+/// these properties are checked.
+fn index_spans(
+    source_size: u64,
+    objects: &[FragmentObject],
+    requested: usize,
+    limits: &Limits,
+) -> Result<Vec<Record>> {
+    let mut records = Vec::new();
+    reserve_index(
+        &mut records,
+        requested,
+        limits,
+        "PDF object index allocation",
+    )?;
+    let mut fragment_bytes = 0_u64;
+    for (index, fragment) in objects.iter().enumerate() {
+        checked_reference(fragment.reference, fragment.range.offset)?;
+        if fragment.range.length == 0 {
+            return Err(malformed(
+                Some(fragment.reference),
+                fragment.range.offset,
+                "indirect object span is empty",
+            ));
+        }
+        let failure = malformed(
+            Some(fragment.reference),
+            fragment.range.offset,
+            "indirect object span overflows 64-bit offset",
+        );
+        let end = fragment.range.end().ok_or(failure)?;
+        if end > source_size {
+            return Err(Error::truncated(
+                fragment.range.offset,
+                fragment.range.length,
+                source_size.saturating_sub(fragment.range.offset),
+            ));
+        }
+        fragment_bytes = fragment_bytes
+            .checked_add(fragment.range.length)
+            .ok_or_else(|| {
+                pdf_limit(
+                    Some(fragment.reference),
+                    fragment.range.offset,
+                    "input bytes",
+                    limits.max_input_bytes,
+                    u64::MAX,
+                )
+            })?;
+        if fragment_bytes > limits.max_input_bytes {
+            return Err(pdf_limit(
+                Some(fragment.reference),
+                fragment.range.offset,
+                "input bytes",
+                limits.max_input_bytes,
+                fragment_bytes,
+            ));
+        }
+        records.push(Record {
+            reference: fragment.reference,
+            range: fragment.range,
+            output_offset: 0,
+            index: Some(index),
+            blank_media_box: None,
+        });
+    }
+    records.sort_unstable_by_key(|record| record.range.offset);
+    for pair in records.windows(2) {
+        // Every span's end was checked above.
+        let previous_end = pair[0].range.offset + pair[0].range.length;
+        if previous_end > pair[1].range.offset {
+            return Err(pdf_error(
+                Some(pair[1].reference),
+                pair[1].range.offset,
+                ErrorKind::Malformed,
+                "indirect object spans overlap",
+            )
+            .ambiguous_repair());
+        }
+    }
+    records.sort_unstable_by_key(|record| record.reference.number);
+    for pair in records.windows(2) {
+        if pair[0].reference.number == pair[1].reference.number {
+            return Err(pdf_error(
+                Some(pair[1].reference),
+                pair[1].range.offset,
+                ErrorKind::Malformed,
+                "duplicate indirect object number",
+            )
+            .ambiguous_repair());
+        }
+    }
+    Ok(records)
+}
+
+fn copy_object<R: RangedSource, W: Write, C: Cancellation>(
+    source: &mut R,
+    out: &mut Output<'_, W, C>,
+    record: &Record,
+    buffer: &mut [u8],
+) -> Result<()> {
+    let range = record.range;
+    let mut copied = 0;
+    while copied < range.length {
+        let length = (range.length - copied).min(buffer.len() as u64) as usize;
+        let offset = checked_add(range.offset, copied)?;
+        read_exact_at(
+            source,
+            offset,
+            &mut buffer[..length],
+            out.limits,
+            out.cancellation,
+        )?;
+        if let Some((first, last)) = record.blank_media_box {
+            let begin = (first as u64).max(copied);
+            let end = (last as u64).min(copied + length as u64);
+            if begin < end {
+                buffer[(begin - copied) as usize..(end - copied) as usize].fill(b' ');
+            }
+        }
+        out.write(&buffer[..length])?;
+        copied += length as u64;
+    }
+    Ok(())
+}
+
+fn page_reference(reference: PdfRef, buffer: &mut [u8; 16]) -> &[u8] {
+    let mut digits = [0_u8; 10];
+    let mut number = reference.number;
+    let mut count = 0;
+    loop {
+        digits[count] = b'0' + (number % 10) as u8;
+        count += 1;
+        number /= 10;
+        if number == 0 {
+            break;
+        }
+    }
+    for position in 0..count {
+        buffer[position] = digits[count - position - 1];
+    }
+    buffer[count..count + 5].copy_from_slice(b" 0 R ");
+    &buffer[..count + 5]
+}
+
+/// Parse every source record once, in object-number order. Integer values
+/// are kept for indirect stream lengths; streams are framed afterwards.
+fn parse_records<R: RangedSource, C: Cancellation>(
+    source: &mut R,
+    records: &[Record],
+    limits: &Limits,
+    cancellation: &C,
+) -> Result<Vec<Option<PlannedObject>>> {
+    let mut planned = Vec::new();
+    reserve_index(
+        &mut planned,
+        records.len(),
+        limits,
+        "PDF scalar index allocation",
+    )?;
+    for record in records {
+        planned.push(if record.range.length == 0 {
+            None
+        } else {
+            Some(parse_planned_object(
+                source,
+                record.range,
+                record.reference,
+                limits,
+                cancellation,
+            )?)
+        });
+    }
+    Ok(planned)
+}
+
+fn validate_fragment_structure<R: RangedSource, C: Cancellation>(
+    source: &mut R,
+    plan: &FragmentPlan<'_>,
+    given: Option<Vec<Option<FragmentInspection>>>,
+    records: &mut [Record],
+    sorted_pages: &[PdfRef],
+    limits: &Limits,
+    cancellation: &C,
+) -> Result<()> {
+    let mut given = given;
+    let mut planned = match given {
+        Some(_) => Vec::new(),
+        None => parse_records(source, records, limits, cancellation)?,
+    };
+    let scalars: Vec<Option<u64>> = planned
+        .iter()
+        .map(|item| item.as_ref().and_then(|item| item.scalar))
+        .collect();
+    let mut kinds = Vec::new();
+    reserve_index(
+        &mut kinds,
+        records.len(),
+        limits,
+        "PDF structure index allocation",
+    )?;
+    let mut stream_flags = Vec::new();
+    reserve_index(
+        &mut stream_flags,
+        records.len(),
+        limits,
+        "PDF stream index allocation",
+    )?;
+    let mut content_evidence = Vec::new();
+    // At most one destination per record, so a `u64` count cannot overflow.
+    let mut destination_count = 0_u64;
+    for position in 0..records.len() {
+        let record = records[position];
+        let inspection = match (&mut given, record.index) {
+            (_, None) => None,
+            (Some(given), Some(index)) => given[index].take(),
+            (None, Some(_)) => {
+                let item = planned[position]
+                    .take()
+                    .ok_or(Error::invalid("planned PDF object was not parsed"))?;
+                let resolve = |reference| {
+                    object_index(records, reference).and_then(|index| {
+                        (records[index].reference == reference)
+                            .then_some(scalars[index])
+                            .flatten()
+                    })
+                };
+                Some(finish_planned_object(
+                    source,
+                    record.range,
+                    record.reference,
+                    item,
+                    limits,
+                    cancellation,
+                    resolve,
+                )?)
+            }
+        };
+        let Some(inspection) = inspection else {
+            stream_flags.push(false);
+            kinds.push(None);
+            continue;
+        };
+        if let Some((first, last)) = inspection.blank_media_box {
+            if first >= last || last as u64 > record.range.length {
+                return Err(malformed(
+                    Some(record.reference),
+                    record.range.offset,
+                    "page box repair exceeds object span",
+                ));
+            }
+            records[position].blank_media_box = Some((first, last));
+        }
+        // The inspector rejects any header other than the expected one.
+        debug_assert_eq!(inspection.reference, record.reference);
+        if inspection.max_referenced_object > MAX_PDF_OBJECTS {
+            return Err(pdf_error(
+                Some(record.reference),
+                record.range.offset,
+                ErrorKind::UnsupportedFormat,
+                "indirect reference exceeds the supported PDF profile",
+            ));
+        }
+        for reference in &inspection.references {
+            checked_reference(*reference, record.range.offset)?;
+            if object_index(records, *reference).is_none() {
+                return Err(malformed(
+                    Some(record.reference),
+                    record.range.offset,
+                    "indirect reference targets a missing object",
+                ));
+            }
+        }
+        if let Some(destination) = inspection.destination {
+            checked_reference(destination, record.range.offset)?;
+            if sorted_pages.binary_search(&destination).is_err() {
+                return Err(malformed(
+                    Some(record.reference),
+                    record.range.offset,
+                    "outline destination does not target an ordered Page object",
+                ));
+            }
+            destination_count += 1;
+            if destination_count > u64::from(limits.max_bookmarks) {
+                return Err(pdf_limit(
+                    Some(record.reference),
+                    record.range.offset,
+                    "bookmarks",
+                    u64::from(limits.max_bookmarks),
+                    destination_count,
+                ));
+            }
+        }
+        if let Some(references) = inspection.contents {
+            content_evidence.push(ContentEvidence {
+                reference: record.reference,
+                kind: ContentEvidenceKind::Page {
+                    direct_array: inspection.contents_is_direct_array,
+                },
+                references,
+            });
+        }
+        if let Some(references) = inspection.scalar_reference_array {
+            content_evidence.push(ContentEvidence {
+                reference: record.reference,
+                kind: ContentEvidenceKind::ScalarArray,
+                references,
+            });
+        }
+        stream_flags.push(inspection.is_stream);
+        kinds.push(Some(inspection.kind));
+    }
+    drop(planned);
+    validate_fragment_contents(records, &stream_flags, &content_evidence)?;
+
+    let mut found_pages = 0_u32;
+    for (index, kind) in kinds.iter().enumerate() {
+        match kind {
+            Some(FragmentKind::Page { .. }) => found_pages += 1,
+            Some(FragmentKind::Catalog) => {
+                return Err(pdf_error(
+                    Some(records[index].reference),
+                    records[index].range.offset,
+                    ErrorKind::Malformed,
+                    "unselected catalog object is present",
+                )
+                .ambiguous_repair());
+            }
+            _ => {}
+        }
+    }
+    if found_pages != plan.pages.len() as u32 {
+        return Err(pdf_error(
+            None,
+            0,
+            ErrorKind::Malformed,
+            "supplied page objects do not match explicit page order",
+        )
+        .ambiguous_repair());
+    }
+    let failure = malformed(
+        Some(plan.pages_root),
+        0,
+        "page tree root is missing from the repair index",
+    );
+    let root_index = object_index(records, plan.pages_root).ok_or(failure)?;
+    if records[root_index].range.length == 0 {
+        for (index, kind) in kinds.iter().enumerate() {
+            match kind {
+                Some(FragmentKind::Page {
+                    parent,
+                    has_media_box,
+                }) => {
+                    if *parent != plan.pages_root {
+                        return Err(pdf_error(
+                            Some(records[index].reference),
+                            records[index].range.offset,
+                            ErrorKind::Malformed,
+                            "page parent differs from the missing root",
+                        )
+                        .ambiguous_repair());
+                    }
+                    if !has_media_box {
+                        return Err(malformed(
+                            Some(records[index].reference),
+                            records[index].range.offset,
+                            "Page has no MediaBox and the synthesized root cannot provide one",
+                        ));
+                    }
+                }
+                Some(FragmentKind::Pages { .. }) => {
+                    return Err(pdf_error(
+                        Some(records[index].reference),
+                        records[index].range.offset,
+                        ErrorKind::Malformed,
+                        "missing page root cannot be synthesized around nested Pages nodes",
+                    )
+                    .ambiguous_repair());
+                }
+                _ => {}
+            }
+        }
+        for page in plan.pages {
+            let failure = malformed(Some(*page), 0, "ordered page object is missing");
+            let index = object_index(records, *page).ok_or(failure)?;
+            if !matches!(kinds[index], Some(FragmentKind::Page { .. })) {
+                return Err(malformed(
+                    Some(*page),
+                    records[index].range.offset,
+                    "ordered page reference is not a Page object",
+                ));
+            }
+        }
+    } else {
+        validate_existing_page_tree(plan, records, &kinds, limits)?;
+    }
+    Ok(())
+}
+
+fn validate_fragment_contents(
+    records: &[Record],
+    stream_flags: &[bool],
+    evidence: &[ContentEvidence],
+) -> Result<()> {
+    let mut validated_arrays = vec![false; evidence.len()];
+    for item in evidence {
+        let ContentEvidenceKind::Page { direct_array } = item.kind else {
+            continue;
+        };
+        let page_index = object_index(records, item.reference).ok_or(Error::invalid(
+            "validated Page content evidence is absent from the object index",
+        ))?;
+        let page_offset = records[page_index].range.offset;
+        if direct_array {
+            for reference in &item.references {
+                require_content_stream(
+                    records,
+                    stream_flags,
+                    *reference,
+                    item.reference,
+                    page_offset,
+                )?;
+            }
+            continue;
+        }
+        let failure = malformed(
+            Some(item.reference),
+            page_offset,
+            "Page Contents lacks an indirect target",
+        );
+        let target = item.references.first().copied().ok_or(failure)?;
+        let failure = malformed(
+            Some(item.reference),
+            page_offset,
+            "Page Contents targets a missing object",
+        );
+        let target_index = object_index(records, target).ok_or(failure)?;
+        if stream_flags[target_index] {
+            continue;
+        }
+        let array_index = evidence
+            .binary_search_by_key(&target.number, |candidate| candidate.reference.number)
+            .ok();
+        let Some((array_index, array)) = array_index
+            .and_then(|index| evidence.get(index).map(|candidate| (index, candidate)))
+            .filter(|(_, candidate)| matches!(candidate.kind, ContentEvidenceKind::ScalarArray))
+        else {
+            return Err(malformed(
+                Some(item.reference),
+                page_offset,
+                "Page Contents target is neither a stream nor a stream reference array",
+            ));
+        };
+        if !validated_arrays[array_index] {
+            for reference in &array.references {
+                require_content_stream(
+                    records,
+                    stream_flags,
+                    *reference,
+                    item.reference,
+                    page_offset,
+                )?;
+            }
+            validated_arrays[array_index] = true;
+        }
+    }
+    Ok(())
+}
+
+fn require_content_stream(
+    records: &[Record],
+    stream_flags: &[bool],
+    target: PdfRef,
+    page: PdfRef,
+    page_offset: u64,
+) -> Result<()> {
+    let failure = malformed(
+        Some(page),
+        page_offset,
+        "Page Contents targets a missing object",
+    );
+    let index = object_index(records, target).ok_or(failure)?;
+    if !stream_flags[index] {
+        return Err(malformed(
+            Some(page),
+            page_offset,
+            "Page Contents array contains a non-stream object",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_existing_page_tree(
+    plan: &FragmentPlan<'_>,
+    records: &[Record],
+    kinds: &[Option<FragmentKind>],
+    limits: &Limits,
+) -> Result<()> {
+    let mut visited = vec![false; records.len()];
+    let stack_capacity = records
+        .len()
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(1))
+        .ok_or(Error::invalid(
+            "PDF page-tree traversal allocation overflows address space",
+        ))?;
+    let mut stack = Vec::new();
+    reserve_index(
+        &mut stack,
+        stack_capacity,
+        limits,
+        "PDF page-tree traversal allocation",
+    )?;
+    // The reserved stack has room for every indexed object twice, so only a
+    // page tree that links more children than that can exhaust it.
+    let push_within = |reference, offset| {
+        move |stack: &mut Vec<PageStep>, step| {
+            if stack.len() >= stack_capacity {
+                return Err(pdf_error(
+                    Some(reference),
+                    offset,
+                    ErrorKind::Malformed,
+                    "page tree has more child links than indexed objects",
+                )
+                .ambiguous_repair());
+            }
+            stack.push(step);
+            Ok(())
+        }
+    };
+    let mut walk = PageWalk::new(plan.pages_root, stack, push_within(plan.pages_root, 0))?;
+    let mut leaves = 0_usize;
+    while let Some(visit) = walk.next(leaves) {
+        let node = visit.map_err(|reference| {
+            malformed(
+                Some(reference),
+                0,
+                "Pages /Count differs from descendant page count",
+            )
+        })?;
+        let reference = node.reference;
+        let failure = malformed(Some(reference), 0, "page-tree child object is missing");
+        let index = object_index(records, reference).ok_or(failure)?;
+        let offset = records[index].range.offset;
+        if visited[index] {
+            return Err(malformed(
+                Some(reference),
+                offset,
+                "page tree contains a repeated child or cycle",
+            ));
+        }
+        visited[index] = true;
+        match kinds[index].as_ref() {
+            Some(FragmentKind::Page {
+                parent,
+                has_media_box,
+            }) => {
+                if Some(*parent) != node.parent {
+                    return Err(malformed(
+                        Some(reference),
+                        offset,
+                        "Page /Parent link does not match the page tree",
+                    ));
+                }
+                if !has_media_box && !node.inherited_media_box {
+                    return Err(malformed(
+                        Some(reference),
+                        offset,
+                        "Page has no direct or inherited MediaBox",
+                    ));
+                }
+                if plan.pages.get(leaves) != Some(&reference) {
+                    return Err(pdf_error(
+                        Some(reference),
+                        offset,
+                        ErrorKind::Malformed,
+                        "page-tree order differs from explicit page order",
+                    )
+                    .ambiguous_repair());
+                }
+                leaves += 1;
+            }
+            Some(FragmentKind::Pages {
+                parent,
+                count,
+                kids,
+                has_media_box,
+            }) => {
+                if *parent != node.parent {
+                    return Err(malformed(
+                        Some(reference),
+                        offset,
+                        "Pages /Parent link does not match the page tree",
+                    ));
+                }
+                if *count == 0 || kids.is_empty() {
+                    return Err(malformed(Some(reference), offset, "Pages node is empty"));
+                }
+                if u64::from(*count) > u64::from(limits.max_pages) {
+                    return Err(pdf_limit(
+                        Some(reference),
+                        offset,
+                        "page-tree count",
+                        u64::from(limits.max_pages),
+                        u64::from(*count),
+                    ));
+                }
+                let media_box = node.inherited_media_box || *has_media_box;
+                let push = push_within(reference, offset);
+                walk.push_kids(reference, *count, kids, media_box, leaves, push)?;
+            }
+            _ => {
+                return Err(malformed(
+                    Some(reference),
+                    offset,
+                    "page-tree child has neither Page nor Pages type",
+                ));
+            }
+        }
+    }
+    if leaves != plan.pages.len() {
+        return Err(pdf_error(
+            Some(plan.pages_root),
+            0,
+            ErrorKind::Malformed,
+            "page tree omits an explicitly ordered page",
+        )
+        .ambiguous_repair());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

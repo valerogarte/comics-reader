@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: MIT
+
+//! Structure-only diagnostics for unseen HN/C8 profiles.
+//!
+//! These helpers reuse the existing page-text readers and report which one
+//! accepts a page, with counts and lengths only. They never return text,
+//! titles or image payload bytes, and they add no format interpretation.
+
+use super::{
+    Hnc8Reader, Location, NativeRecord, NativeRecordVisitor, Variant,
+    appinfo::Trailer,
+    text::{PageText, read_page_text},
+};
+use crate::{Cancellation, RangedSource, Result};
+
+/// The page-text framing accepted by the existing readers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextFraming {
+    /// The indexed text span is empty.
+    None,
+    /// Uncompressed HN-A records.
+    Raw,
+    /// Uncompressed HN-A records after the paired `8003` page-size prefix.
+    RawPaired,
+    /// A 16-byte direct `COMPRESSTEXT` header and one zlib frame.
+    CompressText,
+    /// The 24-byte paired-`8003` and `COMPRESSTEXT` header and one zlib frame.
+    Legacy24,
+    /// Raw C8/HN-B native records.
+    Native,
+}
+
+impl TextFraming {
+    /// A stable lowercase label for reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Raw => "raw",
+            Self::RawPaired => "raw-paired",
+            Self::CompressText => "compresstext",
+            Self::Legacy24 => "legacy-24",
+            Self::Native => "native",
+        }
+    }
+}
+
+/// How a page's text span is framed, without any of its content.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TextStructure {
+    pub framing: TextFraming,
+    /// Glyph, raw or native records counted by the accepting reader.
+    pub records: u32,
+    /// The inflated length of a compressed frame; `None` otherwise.
+    pub decoded_length: Option<u32>,
+}
+
+/// The trailing application-info section; its contents are not parsed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationInfoTail {
+    /// The decimal start offset declared by the trailer.
+    pub offset: u64,
+    /// Bytes from `offset` to the end of the source, including the trailer;
+    /// `None` when the declared offset is not inside the source.
+    pub length: Option<u64>,
+}
+
+struct Discard;
+
+impl NativeRecordVisitor for Discard {
+    fn visit(&mut self, _offset: u64, _record: NativeRecord) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+impl<S: RangedSource, C: Cancellation> Hnc8Reader<'_, S, C> {
+    /// Bytes per page-index row: 20, or 12 for the compact HN-B layout
+    /// selected by a zero word at `0x88`.
+    pub fn page_row_bytes(&self) -> u64 {
+        self.page_row_bytes
+    }
+
+    /// Classify the current page's text with the reader that accepts it.
+    ///
+    /// Call after `next_page` and after reading its image descriptors. HN-A
+    /// and C8 use the compressed or raw page-text reader with the same
+    /// coordinate-group rule as composition. C8 spans whose compressed header
+    /// is absent, and all HN-B spans, are framed as native records. Errors are
+    /// the first located error of the deciding reader.
+    pub fn inspect_text(&mut self) -> Result<TextStructure> {
+        let header = self.header;
+        let loc = Location {
+            variant: Some(header.variant),
+            offset: header.page_index.offset,
+            page: None,
+            image: None,
+        };
+        let page = self
+            .current
+            .ok_or_else(|| loc.malformed("no current page"))?
+            .page;
+        if page.text.length == 0 {
+            return Ok(TextStructure {
+                framing: TextFraming::None,
+                records: 0,
+                decoded_length: None,
+            });
+        }
+        if header.variant != Variant::HnB {
+            match read_page_text(self.source, header, page, self.limits, self.cancellation) {
+                Ok(PageText::Framed(text)) => {
+                    let framing = match text.zlib_frame {
+                        None if text.page_size.is_some() => TextFraming::RawPaired,
+                        None => TextFraming::Raw,
+                        Some(frame) if frame.offset - page.text.offset == 16 => {
+                            TextFraming::CompressText
+                        }
+                        Some(_) => TextFraming::Legacy24,
+                    };
+                    return Ok(TextStructure {
+                        framing,
+                        records: text.record_count,
+                        decoded_length: text.zlib_frame.map(|_| text.decoded_length),
+                    });
+                }
+                // C8 native text has neither compressed nor raw framing.
+                Ok(PageText::Unframed(_)) if header.variant == Variant::C8 => {}
+                Ok(PageText::Unframed(error)) | Err(error) => return Err(error),
+            }
+        }
+        let records = self.visit_native_records(&mut Discard)?;
+        Ok(TextStructure {
+            framing: TextFraming::Native,
+            records,
+            decoded_length: None,
+        })
+    }
+
+    /// Find a trailing `APPINFOSIGN <decimal offset>` marker that ends the
+    /// source, located like the C8 package reader does. Only its presence and
+    /// extent are reported; the section itself is neither validated nor
+    /// decoded, and a marker without a usable offset is reported as absent.
+    /// This does not affect the cursor.
+    pub fn application_info_tail(&mut self) -> Result<Option<ApplicationInfoTail>> {
+        let size = self.source.size();
+        match self.application_info_trailer() {
+            Ok(trailer) => Ok(trailer.map(|Trailer { start, .. }| ApplicationInfoTail {
+                offset: start,
+                length: (start < size).then(|| size - start),
+            })),
+            Err(error) if super::appinfo::TRAILER_DEFECTS.contains(&error.reason) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

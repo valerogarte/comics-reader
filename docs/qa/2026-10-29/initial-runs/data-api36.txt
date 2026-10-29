@@ -1,0 +1,262 @@
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest:
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stack=java.lang.IllegalArgumentException: SFTP path is outside the configured folder
+	at com.valerogarte.comicsreader.sftp.SftpClient.shelfPath(SftpClient.java:179)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:149)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:234)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:147)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:254)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:34)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:228)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+
+INSTRUMENTATION_STATUS: stream=
+Error in differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.IllegalArgumentException: SFTP path is outside the configured folder
+	at com.valerogarte.comicsreader.sftp.SftpClient.shelfPath(SftpClient.java:179)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:149)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:234)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:147)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:254)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:34)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:228)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=14
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 16.628
+There was 1 failure:
+1) differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.IllegalArgumentException: SFTP path is outside the configured folder
+	at com.valerogarte.comicsreader.sftp.SftpClient.shelfPath(SftpClient.java:179)
+	at com.valerogarte.comicsreader.sftp.SftpClient.lambda$downloadShelf$2(SftpClient.java:149)
+	at com.valerogarte.comicsreader.sftp.SftpClient$$ExternalSyntheticLambda1.run(D8$$SyntheticClass:0)
+	at com.valerogarte.comicsreader.sftp.SftpClient.withChannel(SftpClient.java:234)
+	at com.valerogarte.comicsreader.sftp.SftpClient.downloadShelf(SftpClient.java:147)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.downloadCaptured(LibraryRepository.kt:254)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository.access$downloadCaptured(LibraryRepository.kt:34)
+	at com.valerogarte.comicsreader.nativeapp.data.LibraryRepository$downloadRemote$2.invokeSuspend(LibraryRepository.kt:228)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+
+FAILURES!!!
+Tests run: 14,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

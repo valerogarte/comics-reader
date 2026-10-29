@@ -1,0 +1,346 @@
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest:
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=changedHostKeyIsRejectedAfterRepositoryRecreationAndLegacyPinIsCopied
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+Error in cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest):
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: stack=java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=defaultNasSeedsOnceAndExplicitEmptyListNeverReseeds
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=twoRealProfilesKeepSameRemotePathAndDownloadLinksIndependent
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpRejectsTraversalEscapingSymlinksAndInvalidRangesWithoutRemoteWrites
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpExplicitDownloadsAreIdempotentAndBulkOnlyDownloadsCurrentFolder
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=differentServersDownloadInParallelAndEditingOtherServerKeepsConnectionAlive
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=duplicateSourcesOrProfileIdsAreRejectedAtomically
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=matchingLegacyNasIsNotDuplicatedAndGetsDefaultLabel
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=12
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=legacySingleProfileMigratesWithDifferentNasAndPreservesSourceFingerprint
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=13
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=encryptedProfilesRoundTripKeepStableIdsWithoutPlaintextSecrets
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=14
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=emptyBuildDefaultLeavesRoomForSeedInFutureBuild
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=15
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: numtests=16
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: test=localImportIsPrivateDeduplicatedAndPermanentDeleteKeepsEmptyShelfUntilAccepted
+INSTRUMENTATION_STATUS: class=com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest
+INSTRUMENTATION_STATUS: current=16
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 13.958
+There were 3 failures:
+1) firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles$1.invokeSuspend(NativeDataInstrumentedTest.kt:169)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.firstRepositoryReconcilesKilledProcessResiduesAndLaterRepositoriesPreserveActiveFiles(NativeDataInstrumentedTest.kt:151)
+2) explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins$1.invokeSuspend(NativeDataInstrumentedTest.kt:124)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.explicitSaveRecoversCorruptEncryptedProfilesWithoutRemovingLibraryCacheOrPins(NativeDataInstrumentedTest.kt:113)
+3) cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest)
+java.lang.ClassCastException: com.valerogarte.comicsreader.nativeapp.data.LibraryDatabase cannot be cast to java.lang.AutoCloseable
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest$cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource$1.invokeSuspend(NativeDataInstrumentedTest.kt:192)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+	at com.valerogarte.comicsreader.nativeapp.data.NativeDataInstrumentedTest.cachedFoldersStayOfflineAndSeparateIdenticalRemotePathsBySource(NativeDataInstrumentedTest.kt:187)
+
+FAILURES!!!
+Tests run: 16,  Failures: 3
+
+
+INSTRUMENTATION_CODE: -1

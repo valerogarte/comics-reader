@@ -1,0 +1,16 @@
+[
+  {
+    "suite": "reader",
+    "api": 24,
+    "passed": true,
+    "tests": 38,
+    "log": "reader-api24.txt"
+  },
+  {
+    "suite": "data",
+    "api": 24,
+    "passed": false,
+    "tests": null,
+    "log": "data-api24.txt"
+  }
+]

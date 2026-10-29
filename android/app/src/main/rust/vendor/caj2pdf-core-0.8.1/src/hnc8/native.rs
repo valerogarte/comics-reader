@@ -1,0 +1,517 @@
+// SPDX-License-Identifier: MIT
+
+//! Framing of independently observed raw C8 and HN-B native-page subsets.
+//! Events preserve uninterpreted words; they do not imply renderability.
+
+use super::{Hnc8Reader, Location, Variant, read_fixed};
+use crate::{Cancellation, RangedSource, Result};
+
+/// One framed native record. Units, style/font words and image words remain raw.
+/// Unknown required semantics must be rejected by a renderer, never discarded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeRecord {
+    /// A position, style or observed four-byte control, with its original tag.
+    Control { tag: u16, value: u16 },
+    /// An observed eight-byte control (`81ff/1..=3`, `80cc/0204`,
+    /// or the HN-B `c052/a385` prefix).
+    /// The two payload words are atomic and uninterpreted. Preserving their
+    /// framing does not establish font, layout or resource semantics.
+    ExtendedControl {
+        tag: u16,
+        value: u16,
+        words: [u16; 2],
+    },
+    /// A glyph code with the current run context. This is not Unicode.
+    Glyph {
+        x: u16,
+        y: u16,
+        style: u16,
+        code: u16,
+    },
+    /// Two coordinate pairs with a checked, variant-specific record boundary.
+    /// Neither stroke style nor physical geometry is assigned here. In particular,
+    /// the observed `8010/1` form does not imply a visible `8006` stroke.
+    Drawing {
+        tag: u16,
+        style: u16,
+        points: [[u16; 2]; 2],
+    },
+    /// Thirteen words after the image marker. Do not apply HN-A coordinates.
+    Image { words: [u16; 13] },
+    /// The observed `810a/d300` image form with zero flags. Coordinates are
+    /// absolute source units without the older image form's high-bit markers.
+    /// `reference` locates the raw name bytes, excluding optional NUL padding.
+    /// It is not a filesystem resource request. Match embedded descriptors in
+    /// record order; image orientation remains codec-specific.
+    ImageReference {
+        coordinate: super::RawTextCoordinate,
+        reference: super::Span,
+    },
+    /// The observed `80cc/01xx` encoded-string record. The low byte of
+    /// `value` counts all words, including the two-word header. `payload`
+    /// locates 0..=253 validated `e020..=e07e` words, optionally followed by
+    /// an encoded NUL (`e000`), in the original source.
+    /// Its role is deliberately uninterpreted; this is not visible page text
+    /// or permission to discard a required resource reference.
+    EncodedString { value: u16, payload: super::Span },
+    /// The final record and its uninterpreted payload, if present.
+    /// Verified HN-B pages may end with only the two-byte `8004` tag.
+    /// HN-B indexed spans may also contain opaque bytes after a full end record;
+    /// those bytes are not native rendering events.
+    End { value: Option<u16> },
+}
+
+/// Decode the admitted mode-2 C8/HN-B native character subset without allocating.
+///
+/// This helper does not select a profile from a container. Mode 0 has distinct
+/// character semantics; callers must not infer them from this mode-2 mapping.
+///
+/// Ordinary codes use their big-endian two-byte GB18030 value. The independently
+/// verified A0-prefixed letters/digits use ASCII plus 0x80 in the low byte.
+/// Independently observed symbol codes have explicit Unicode mappings.
+/// Other A0 codes, private-use mappings and malformed sequences return `None`;
+/// they must remain explicit unsupported glyphs rather than blank substitutions.
+/// This maps characters only: fonts, metrics, drawing/text order and complete
+/// native page rendering still require separate validation.
+pub fn decode_native_character(code: u16) -> Option<char> {
+    match code {
+        0xa0a6 => return Some('＆'),
+        0xa0ad => return Some('－'),
+        0xa0ae => return Some('．'),
+        0xa0af => return Some('／'),
+        0xa0ba => return Some(':'),
+        0xaab1 => return Some('∙'),
+        0xaab2 => return Some('-'),
+        0xaab3 => return Some('∗'),
+        0xaca3 => return Some('►'),
+        _ => {}
+    }
+    let [lead, second] = code.to_be_bytes();
+    if lead == 0xa0 {
+        let ascii = second.checked_sub(0x80)?;
+        return ascii.is_ascii_alphanumeric().then(|| char::from(ascii));
+    }
+    crate::gb18030::decode_two_byte(lead, second)
+        .filter(|c| !c.is_control() && !(0xe000..=0xf8ff).contains(&u32::from(*c)))
+}
+
+/// Decode characters whose interpretation is verified for the supplied native mode.
+///
+/// Obtain the raw mode from [`super::Header::native_mode`]. Mode 2 uses the
+/// established mapping above. Mode 0 admits independently controlled Latin
+/// alphabets, digits, punctuation and the ordinary GB2312 Han range.
+/// Unknown modes/codes return `None`. A decoded letter does not select its font
+/// resource or establish placement: mode-0 A9 and A3 letters use distinct fonts.
+pub fn decode_native_character_for_mode(mode: u32, code: u16) -> Option<char> {
+    match (mode, code) {
+        (2, _) => decode_native_character(code),
+        (0, 0xa980..=0xa999) => Some(char::from(b'A' + (code - 0xa980) as u8)),
+        (0, 0xa99a..=0xa9b3) => Some(char::from(b'a' + (code - 0xa99a) as u8)),
+        (0, 0xa3c1..=0xa3da) => Some(char::from(b'A' + (code - 0xa3c1) as u8)),
+        (0, 0xa3e1..=0xa3fa) => Some(char::from(b'a' + (code - 0xa3e1) as u8)),
+        (0, 0xa3b0..=0xa3b9) => Some(char::from(b'0' + (code - 0xa3b0) as u8)),
+        (0, 0xa1a1) => Some(' '),
+        (0, 0x9ff5) => Some('／'),
+        (0, 0xa3a7) => Some('’'),
+        (0, 0xaab1) => Some('.'),
+        (0, 0xaab2) => Some('-'),
+        (
+            0,
+            0xa1a2
+            | 0xa1a3
+            | 0xa1aa
+            | 0xa1ae
+            | 0xa1af
+            | 0xa1b0
+            | 0xa1b1
+            | 0xa3a8
+            | 0xa3a9
+            | 0xa3ab..=0xa3af
+            | 0xa3ba
+            | 0xa3bb
+            | 0xa3bf
+            | 0xa3db
+            | 0xa3dd,
+        ) => crate::gb18030::decode_two_byte((code >> 8) as u8, code as u8),
+        (0, 0xb0a1..=0xf7fe) if (0xa1..=0xfe).contains(&(code & 0xff)) => {
+            crate::gb18030::decode_two_byte((code >> 8) as u8, code as u8)
+                .filter(|character| ('\u{4e00}'..='\u{9fff}').contains(character))
+        }
+        _ => None,
+    }
+}
+
+/// Decode only the established image-coordinate fields of the raw C8 profile.
+///
+/// `words` is the payload of [`NativeRecord::Image`]. The observed `d300`
+/// profile stores x and width with `c000` high bits; y and height are unsigned
+/// words. Unknown prefixes and zero extents return `None`. Other payload words
+/// remain uninterpreted: this helper does not approve their rendering semantics.
+///
+/// Coordinates are absolute source units. Subtract [`super::Header::native_origin`]
+/// in signed or floating-point arithmetic, without a text-specific margin.
+/// Image row orientation depends on the decoded representation; this helper
+/// neither flips rows nor supplies a universal PDF image transform.
+pub fn decode_native_image_coordinate(words: &[u16; 13]) -> Option<super::RawTextCoordinate> {
+    if words[0] != 0xd300 || words[1] & 0xc000 != 0xc000 || words[3] & 0xc000 != 0xc000 {
+        return None;
+    }
+    let width = words[3] & 0x3fff;
+    if width == 0 || words[4] == 0 {
+        return None;
+    }
+    Some(super::RawTextCoordinate {
+        x: words[1] & 0x3fff,
+        y: words[2],
+        width,
+        height: words[4],
+    })
+}
+
+/// Receives one record at a time in source order, including all known controls.
+/// A callback returns before the next record is read. Events delivered before
+/// a later error are an incomplete prefix and must not be published as a page.
+pub trait NativeRecordVisitor {
+    fn visit(&mut self, offset: u64, record: NativeRecord) -> crate::Result<()>;
+}
+
+impl<S: RangedSource, C: Cancellation> Hnc8Reader<'_, S, C> {
+    /// Visit admitted C8 or HN-B raw native records without allocating.
+    /// HN-B admits independently controlled glyph runs, controls, three drawing
+    /// forms and fixed-length image records. Other C8 framing is not inherited.
+    /// Call `next_page` first. This does not consume image descriptors, decode
+    /// characters or enable conversion. Unknown framing stops at its source byte.
+    pub fn visit_native_records<V: NativeRecordVisitor>(&mut self, visitor: &mut V) -> Result<u32> {
+        let loc = Location {
+            variant: Some(self.header.variant),
+            offset: self
+                .current
+                .map_or(self.header.page_index.offset, |p| p.page.text.offset),
+            page: self.current.map(|p| p.page.page_number),
+            image: None,
+        };
+        let page = self
+            .current
+            .ok_or_else(|| loc.malformed("no current page"))?
+            .page;
+        if !matches!(self.header.variant, Variant::C8 | Variant::HnB) {
+            return Err(loc.unsupported("native record variant"));
+        }
+        if self.cancellation.is_cancelled() {
+            return Err(loc.cancelled());
+        }
+        // Metadata came from this cursor, so its span and counts are checked.
+        // Unlike compressed text, a native page can be just one end record.
+        if page.text.offset < self.header.page_index.checked_end().expect("checked index") {
+            return Err(loc.malformed("native text span: overlaps protected container index"));
+        }
+        let end = page.text.checked_end().expect("checked text span");
+        let mut position = page.text.offset;
+        let mut count = 0;
+        let mut images = 0;
+        let (mut y, mut style) = (None, None);
+        let mut explicit_axes = [None; 2];
+        while position < end {
+            let at = loc.at(position);
+            let mut bytes = [0_u8; 28];
+            let bare_end = self.header.variant == Variant::HnB && end - position == 2;
+            let mut length = if bare_end { 2 } else { 4 };
+            self.native_bytes(position, end, &mut bytes[..length], at)?;
+            let tag = word(&bytes[..2]);
+            if bare_end && tag != 0x8004 {
+                return Err(at.truncated("native record", 4, 2));
+            }
+            let value = word(&bytes[2..4]);
+            if self.header.variant == Variant::HnB
+                && tag >= 0x8000
+                && !matches!(
+                    (tag, value),
+                    (0x8001 | 0x8002 | 0x8004, _)
+                        | (0x801d, 0 | 3 | 4)
+                        | (0x801c, 4)
+                        | (0x8067, 5 | 6 | 7 | 9 | 18)
+                        | (0x8069, 0x1084)
+                        | (0x80ce, 0 | 1)
+                        | (0x8070 | 0x8071, 0x001c | 0x0024 | 0x002b)
+                        | (0x8072..=0x8074, _)
+                        | (0x8024, 0x2800 | 0x2815 | 0x281d)
+                        | (0xc053, _)
+                        | (0xffff, 5)
+                        | (0x8006, 0xa381 | 0xa383 | 0xa385)
+                        | (0xc052, 0xa385)
+                        | (0x800a, 0xd300)
+                )
+            {
+                return Err(at.unsupported("HN-B native record tag/value"));
+            }
+            let record = match tag {
+                0x8001 => {
+                    y = Some(value);
+                    NativeRecord::Control { tag, value }
+                }
+                0x8002 => {
+                    style = Some(value);
+                    explicit_axes = [None; 2];
+                    NativeRecord::Control { tag, value }
+                }
+                0x801d if matches!(value, 0 | 3 | 4 | 28 | 31) => {
+                    NativeRecord::Control { tag, value }
+                }
+                0x8067
+                    if matches!(value, 0 | 4 | 5 | 6 | 7 | 8 | 9 | 11)
+                        || (self.header.variant == Variant::HnB && value == 18) =>
+                {
+                    NativeRecord::Control { tag, value }
+                }
+                0x8070 | 0x8071 if matches!(value, 1 | 4 | 22 | 34 | 36 | 38 | 40) => {
+                    NativeRecord::Control { tag, value }
+                }
+                0x801c if matches!(value, 2..=4) => NativeRecord::Control { tag, value },
+                0x80ce if value <= 1 => NativeRecord::Control { tag, value },
+                0x8024 if matches!(value, 0x2800 | 0x2815 | 0x281c | 0x281d) => {
+                    NativeRecord::Control { tag, value }
+                }
+                // Values were checked by the HN-B profile guard above.
+                0x8069 | 0x8070 | 0x8071 | 0x8072 | 0x8073 | 0xc053 | 0xffff
+                    if self.header.variant == Variant::HnB =>
+                {
+                    NativeRecord::Control { tag, value }
+                }
+                0x8021 if matches!(value, 0x2000 | 0x2009) => NativeRecord::Control { tag, value },
+                0x80d3 if value <= 2 => NativeRecord::Control { tag, value },
+                0x80d0 | 0x80d2 | 0x80d5 | 0x9002 if value == 0 => {
+                    NativeRecord::Control { tag, value }
+                }
+                0x80d1 if value == 1 => NativeRecord::Control { tag, value },
+                0x81ff | 0x80cc | 0xc052
+                    if matches!((tag, value), (0x81ff, 1..=3) | (0x80cc, 0x0204))
+                        || (self.header.variant == Variant::HnB
+                            && (tag, value) == (0xc052, 0xa385)) =>
+                {
+                    length = 8;
+                    self.native_bytes(position + 4, end, &mut bytes[4..8], at)?;
+                    NativeRecord::ExtendedControl {
+                        tag,
+                        value,
+                        words: [word(&bytes[4..6]), word(&bytes[6..8])],
+                    }
+                }
+                0x80cc if (0x0102..=0x01ff).contains(&value) => {
+                    length = usize::from(value & 0xff) * 2;
+                    let mut consumed = 4;
+                    while consumed < length {
+                        let count = (length - consumed).min(bytes.len());
+                        self.native_bytes(
+                            position + consumed as u64,
+                            end,
+                            &mut bytes[..count],
+                            at,
+                        )?;
+                        for (index, pair) in bytes[..count].as_chunks::<2>().0.iter().enumerate() {
+                            let terminal_nul =
+                                word(pair) == 0xe000 && consumed + index * 2 + 2 == length;
+                            if !(0xe020..=0xe07e).contains(&word(pair)) && !terminal_nul {
+                                return Err(at
+                                    .at(position + (consumed + index * 2) as u64)
+                                    .unsupported("native encoded-string word"));
+                            }
+                        }
+                        consumed += count;
+                    }
+                    NativeRecord::EncodedString {
+                        value,
+                        payload: super::Span {
+                            offset: position + 4,
+                            length: length as u64 - 4,
+                        },
+                    }
+                }
+                0x8072..=0x8074 | 0xc053 | 0xc054 => NativeRecord::Control { tag, value },
+                0xffff if value == 5 => NativeRecord::Control { tag, value },
+                _ if matches!(
+                    (tag, value),
+                    (0x8006, 0xa381 | 0xa383 | 0xa385 | 0xa387 | 0xa38b | 0xa38d)
+                        | (0x8010, 1 | 2 | 46 | 117)
+                        | (0x8090, _)
+                ) || (self.header.variant == Variant::C8
+                    && matches!((tag, value), (0x8007, 0xa380 | 0xa382) | (0x8008, 0xa380))) =>
+                {
+                    length = 12;
+                    self.native_bytes(position + 4, end, &mut bytes[4..length], at)?;
+                    NativeRecord::Drawing {
+                        tag,
+                        style: value,
+                        points: [
+                            [word(&bytes[4..6]), word(&bytes[6..8])],
+                            [word(&bytes[8..10]), word(&bytes[10..12])],
+                        ],
+                    }
+                }
+                0x800a if value == 0xd300 => {
+                    length = 28;
+                    self.native_bytes(position + 4, end, &mut bytes[4..length], at)?;
+                    if images == page.image_count {
+                        return Err(
+                            at.malformed("native image records: exceed declared image count")
+                        );
+                    }
+                    images += 1;
+                    let mut words = [0; 13];
+                    for (out, pair) in words.iter_mut().zip(bytes[2..].as_chunks::<2>().0) {
+                        *out = word(pair);
+                    }
+                    NativeRecord::Image { words }
+                }
+                0x810a if value == 0xd300 => {
+                    self.native_bytes(position + 4, end, &mut bytes[4..16], at)?;
+                    let flags = word(&bytes[12..14]);
+                    if flags != 0 {
+                        return Err(at
+                            .at(position + 12)
+                            .unsupported("native image-reference flags"));
+                    }
+                    let coordinate = super::RawTextCoordinate {
+                        x: word(&bytes[4..6]),
+                        y: word(&bytes[6..8]),
+                        width: word(&bytes[8..10]),
+                        height: word(&bytes[10..12]),
+                    };
+                    let name_bytes = usize::from(word(&bytes[14..16]));
+                    // Names are length-delimited and word-aligned. A name
+                    // already aligned to four bytes need not have a NUL;
+                    // independently controlled older forms add four zero bytes.
+                    // Preserve a span instead of allocating or opening a name.
+                    length = (16 + name_bytes).next_multiple_of(4);
+                    let mut consumed = 16;
+                    while consumed < length {
+                        let count = (length - consumed).min(bytes.len());
+                        self.native_bytes(
+                            position + consumed as u64,
+                            end,
+                            &mut bytes[..count],
+                            at,
+                        )?;
+                        for (index, &byte) in bytes[..count].iter().enumerate() {
+                            if consumed + index >= 16 + name_bytes && byte != 0 {
+                                return Err(at.at(position + (consumed + index) as u64).malformed(
+                                    "native image reference: nonzero terminator or padding",
+                                ));
+                            }
+                        }
+                        consumed += count;
+                    }
+                    if name_bytes.is_multiple_of(4) && end - position >= length as u64 + 4 {
+                        self.native_bytes(position + length as u64, end, &mut bytes[..4], at)?;
+                        if bytes[..4] == [0; 4] {
+                            length += 4;
+                        }
+                    }
+                    if images == page.image_count {
+                        return Err(
+                            at.malformed("native image records: exceed declared image count")
+                        );
+                    }
+                    images += 1;
+                    NativeRecord::ImageReference {
+                        coordinate,
+                        reference: super::Span {
+                            offset: position + 16,
+                            length: name_bytes as u64,
+                        },
+                    }
+                }
+                0x8004 => {
+                    if self.header.variant != Variant::HnB && position + length as u64 != end {
+                        return Err(
+                            at.malformed("native page end: trailing bytes in indexed text span")
+                        );
+                    }
+                    if images != page.image_count {
+                        return Err(
+                            at.malformed("native image records: differ from declared image count")
+                        );
+                    }
+                    NativeRecord::End {
+                        value: (!bare_end).then_some(value),
+                    }
+                }
+                x if x < 0x8000 => {
+                    // Verified axis pairs establish the initial run without
+                    // inventing a default size when either axis is missing.
+                    let style = style.or(match (self.header.variant, explicit_axes) {
+                        (Variant::HnB, [Some(28 | 43), Some(28 | 43)]) => Some(0),
+                        (Variant::C8, [Some(width @ (22 | 34 | 38 | 40)), Some(height)])
+                            if width == height =>
+                        {
+                            Some(0)
+                        }
+                        _ => None,
+                    });
+                    if self.header.variant == Variant::HnB && style.is_none() {
+                        return Err(at.unsupported("HN-B implicit native glyph style"));
+                    }
+                    let (Some(y), Some(style)) = (y, style) else {
+                        return Err(at.malformed("native glyph: missing run position or style"));
+                    };
+                    NativeRecord::Glyph {
+                        x,
+                        y,
+                        style,
+                        code: value,
+                    }
+                }
+                _ => {
+                    return Err(at.unsupported("native record tag/value"));
+                }
+            };
+            if matches!(tag, 0x8070 | 0x8071) {
+                explicit_axes[usize::from(tag - 0x8070)] = Some(value);
+            }
+            visitor
+                .visit(position, record)
+                .map_err(|source| at.locate(source))?;
+            if self.cancellation.is_cancelled() {
+                return Err(at.cancelled());
+            }
+            count += 1;
+            position += length as u64;
+            if matches!(record, NativeRecord::End { .. }) {
+                return Ok(count);
+            }
+        }
+        Err(loc.at(end).malformed("native page end: missing end record"))
+    }
+
+    fn native_bytes(
+        &mut self,
+        offset: u64,
+        end: u64,
+        bytes: &mut [u8],
+        loc: Location,
+    ) -> Result<()> {
+        // Every requested offset is within the already checked page interval.
+        if bytes.len() as u64 > end - offset {
+            return Err(loc.at(offset).truncated(
+                "native record",
+                bytes.len() as u64,
+                end - offset,
+            ));
+        }
+        read_fixed(
+            self.source,
+            self.limits,
+            self.cancellation,
+            offset,
+            bytes,
+            loc.at(offset),
+            "native record",
+        )
+    }
+}
+
+fn word(bytes: &[u8]) -> u16 {
+    u16::from_le_bytes([bytes[0], bytes[1]])
+}
+
+#[cfg(test)]
+mod tests;

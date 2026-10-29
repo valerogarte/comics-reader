@@ -1,0 +1,25 @@
+# Local development
+.idea/
+.vscode/
+.claude/
+.DS_Store
+*.log
+.env*
+
+# Android / Gradle
+.gradle/
+**/.kotlin/
+**/build/
+**/.cxx/
+**/.externalNativeBuild/
+local.properties
+/android/sftp-default.local.json
+*.iml
+*.apk
+*.aab
+*.aar
+*.jks
+*.keystore
+
+# Rust native builds
+**/target/

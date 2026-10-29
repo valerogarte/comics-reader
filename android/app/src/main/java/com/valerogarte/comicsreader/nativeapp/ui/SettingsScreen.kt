@@ -1,0 +1,193 @@
+package com.valerogarte.comicsreader.nativeapp.ui
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.valerogarte.comicsreader.R
+import java.util.UUID
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
+    var draft by remember { mutableStateOf(settings) }
+    var editingServer by remember { mutableStateOf<UiSftpServer?>(null) }
+    var deletingServer by remember { mutableStateOf<UiSftpServer?>(null) }
+    LaunchedEffect(settings.fontPath, settings.backgroundImagePath) {
+        draft = draft.copy(
+            fontPath = settings.fontPath,
+            backgroundImagePath = settings.backgroundImagePath,
+            font = if (settings.fontPath != draft.fontPath) settings.font else draft.font,
+        )
+    }
+    val validServers = draft.sftpServers.all(::validSftpServer)
+    Dialog(onDismissRequest = actions::onCloseSettings, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize()) {
+            Scaffold(
+                topBar = { TopAppBar(
+                    title = { Text(stringResource(R.string.native_settings)) },
+                    navigationIcon = { IconButton(onClick = actions::onCloseSettings) { Icon(Icons.Default.Close, stringResource(R.string.native_close)) } },
+                    actions = { TextButton(onClick = { actions.onSaveSettings(draft) }, enabled = validServers, modifier = Modifier.testTag("save_settings")) { Text(stringResource(R.string.native_save)) } },
+                ) },
+            ) { insets ->
+                Column(
+                    Modifier.fillMaxSize().padding(insets).testTag("settings_scroll").verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.titleLarge)
+                    ChoiceRow(stringResource(R.string.native_theme), draft.theme,
+                        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark))) { draft = draft.copy(theme = it) }
+                    ChoiceRow(stringResource(R.string.native_background), draft.background,
+                        listOf("cream" to stringResource(R.string.native_cream), "white" to stringResource(R.string.native_white), "sepia" to stringResource(R.string.native_sepia))) { draft = draft.copy(background = it) }
+                    OutlinedButton(onClick = actions::onPickBackground) { Text(stringResource(R.string.native_pick_background)) }
+                    if (draft.backgroundImagePath != null) {
+                        TextButton(onClick = { draft = draft.copy(backgroundImagePath = null) }) { Text(stringResource(R.string.native_remove_background)) }
+                    }
+                    ChoiceRow(stringResource(R.string.native_font), draft.font,
+                        listOf("sans" to stringResource(R.string.native_sans), "serif" to stringResource(R.string.native_serif), "mono" to stringResource(R.string.native_mono)) +
+                            if (draft.fontPath != null) listOf("custom" to stringResource(R.string.native_custom_font)) else emptyList()) { draft = draft.copy(font = it) }
+                    OutlinedButton(onClick = actions::onImportFont) { Text(stringResource(R.string.native_import_font)) }
+                    Column {
+                        Text(stringResource(R.string.native_font_size, draft.fontSize.toInt()), style = MaterialTheme.typography.bodyMedium)
+                        Slider(value = draft.fontSize.coerceIn(12f, 32f), onValueChange = { draft = draft.copy(fontSize = it) }, valueRange = 12f..32f, steps = 19)
+                    }
+                    SettingSwitch(stringResource(R.string.native_keep_screen_on), draft.keepScreenOn) { draft = draft.copy(keepScreenOn = it) }
+                    SettingSwitch(stringResource(R.string.native_right_to_left), draft.rightToLeft) { draft = draft.copy(rightToLeft = it) }
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    Text(stringResource(R.string.native_sftp_servers), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.native_sftp_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!validServers) Text(stringResource(R.string.native_invalid_servers), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    if (draft.sftpServers.isEmpty()) Text(stringResource(R.string.native_no_sftp_servers), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    draft.sftpServers.forEach { server ->
+                        OutlinedCard(Modifier.fillMaxWidth().testTag("server_settings:${server.id}")) {
+                            Row(Modifier.fillMaxWidth().clickable { editingServer = server }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.primary)
+                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                                    Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("${server.host}:${server.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(server.rootPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                IconButton(onClick = { editingServer = server }, modifier = Modifier.testTag("edit_server:${server.id}")) { Icon(Icons.Default.Edit, stringResource(R.string.native_edit_sftp_server)) }
+                                IconButton(onClick = { deletingServer = server }, modifier = Modifier.testTag("delete_server:${server.id}")) { Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_sftp_server)) }
+                            }
+                        }
+                    }
+                    OutlinedButton(modifier = Modifier.testTag("add_server"), onClick = {
+                        editingServer = UiSftpServer(UUID.randomUUID().toString(), "", "", username = "", password = "")
+                    }) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_add_sftp_server)) }
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+    editingServer?.let { initial ->
+        SftpServerEditor(initial,
+            onDismiss = { editingServer = null },
+            onApply = { server ->
+                val exists = draft.sftpServers.any { it.id == server.id }
+                draft = draft.copy(sftpServers = if (exists) draft.sftpServers.map { if (it.id == server.id) server else it } else draft.sftpServers + server)
+                editingServer = null
+            },
+        )
+    }
+    deletingServer?.let { server ->
+        AlertDialog(
+            onDismissRequest = { deletingServer = null },
+            title = { Text(stringResource(R.string.native_delete_sftp_server)) },
+            text = { Text(stringResource(R.string.native_delete_sftp_server_message, server.name)) },
+            confirmButton = { TextButton(onClick = {
+                draft = draft.copy(sftpServers = draft.sftpServers.filterNot { it.id == server.id })
+                deletingServer = null
+            }) { Text(stringResource(R.string.native_delete), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { deletingServer = null }) { Text(stringResource(R.string.native_cancel)) } },
+        )
+    }
+}
+
+@Composable
+private fun SftpServerEditor(initial: UiSftpServer, onDismiss: () -> Unit, onApply: (UiSftpServer) -> Unit) {
+    var server by remember(initial.id) { mutableStateOf(initial) }
+    var revealPassword by remember { mutableStateOf(false) }
+    val portValid = server.port.toIntOrNull()?.let { it in 1..65535 } == true
+    val rootValid = server.rootPath.trim().startsWith('/') && !server.rootPath.contains('\u0000')
+    val hostValid = validSftpHost(server.host)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.native_sftp_server)) },
+        text = {
+            Column(Modifier.fillMaxWidth().testTag("server_editor_scroll").verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(server.name, onValueChange = { server = server.copy(name = it) }, label = { Text(stringResource(R.string.native_server_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    isError = server.name.isBlank(), supportingText = { if (server.name.isBlank()) Text(stringResource(R.string.native_required)) })
+                OutlinedTextField(server.host, onValueChange = { server = server.copy(host = it) }, label = { Text(stringResource(R.string.native_host)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), isError = !hostValid,
+                    supportingText = { if (!hostValid) Text(stringResource(if (server.host.isBlank()) R.string.native_required else R.string.native_invalid_host)) })
+                OutlinedTextField(server.port, onValueChange = { if (it.length <= 5 && it.all(Char::isDigit)) server = server.copy(port = it) }, label = { Text(stringResource(R.string.native_port)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), isError = !portValid,
+                    supportingText = { if (!portValid) Text(stringResource(R.string.native_invalid_port)) })
+                OutlinedTextField(server.username, onValueChange = { server = server.copy(username = it) }, label = { Text(stringResource(R.string.native_username)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    isError = server.username.isBlank(), supportingText = { if (server.username.isBlank()) Text(stringResource(R.string.native_required)) })
+                OutlinedTextField(server.password, onValueChange = { server = server.copy(password = it) }, label = { Text(stringResource(R.string.native_password)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (revealPassword) VisualTransformation.None else PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = { IconButton(onClick = { revealPassword = !revealPassword }) {
+                        Icon(if (revealPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, stringResource(if (revealPassword) R.string.native_hide_password else R.string.native_show_password))
+                    } })
+                OutlinedTextField(server.rootPath, onValueChange = { server = server.copy(rootPath = it) }, label = { Text(stringResource(R.string.native_root_folder)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    isError = !rootValid, supportingText = { if (!rootValid) Text(stringResource(R.string.native_invalid_root)) })
+            }
+        },
+        confirmButton = { TextButton(modifier = Modifier.testTag("apply_server"), enabled = validSftpServer(server), onClick = {
+            onApply(server.copy(name = server.name.trim(), host = server.host.trim(), port = server.port.toInt().toString(), username = server.username.trim(), rootPath = server.rootPath.trim()))
+        }) { Text(stringResource(R.string.native_apply)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.native_cancel)) } },
+    )
+}
+
+private fun validSftpHost(host: String): Boolean = host.isNotBlank() && host.trim().none { it.isWhitespace() || it == '/' || it == '\\' || it == '\u0000' }
+
+private fun validSftpServer(server: UiSftpServer): Boolean = server.name.isNotBlank() && validSftpHost(server.host) &&
+    server.username.isNotBlank() && !server.username.contains('\u0000') &&
+    server.port.toIntOrNull()?.let { it in 1..65535 } == true &&
+    server.rootPath.trim().startsWith('/') && !server.rootPath.contains('\u0000')
+
+@Composable
+internal fun ChoiceRow(label: String, value: String, choices: List<Pair<String, String>>, onChange: (String) -> Unit) {
+    Column {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            choices.forEach { (key, title) -> FilterChip(selected = value == key, onClick = { onChange(key) }, label = { Text(title) }) }
+        }
+    }
+}
+
+@Composable
+internal fun SettingSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(value = checked, role = Role.Switch, onValueChange = onChange), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.weight(1f).padding(end = 12.dp), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked, onCheckedChange = null)
+    }
+}

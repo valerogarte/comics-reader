@@ -1,0 +1,7 @@
+# Preserve the formatting of native dependencies and recorded QA output.
+android/app/src/main/cpp/vendor/** -whitespace conflict-marker-size=32
+android/app/src/main/rust/vendor/** -whitespace conflict-marker-size=32
+docs/qa/** -whitespace
+
+# The Windows Gradle launcher uses CRLF.
+android/gradlew.bat whitespace=cr-at-eol

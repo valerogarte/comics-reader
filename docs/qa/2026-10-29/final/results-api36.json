@@ -1,0 +1,37 @@
+[
+  {
+    "suite": "data",
+    "api": 36,
+    "passed": true,
+    "tests": 16,
+    "log": "data-api36.txt"
+  },
+  {
+    "suite": "reader",
+    "api": 36,
+    "passed": true,
+    "tests": 38,
+    "log": "reader-api36.txt"
+  },
+  {
+    "suite": "ui",
+    "api": 36,
+    "passed": true,
+    "tests": 16,
+    "log": "ui-api36.txt"
+  },
+  {
+    "suite": "workflow",
+    "api": 36,
+    "passed": true,
+    "tests": 8,
+    "log": "workflow-api36.txt"
+  },
+  {
+    "suite": "activity",
+    "api": 36,
+    "passed": true,
+    "tests": 2,
+    "log": "activity-api36.txt"
+  }
+]
