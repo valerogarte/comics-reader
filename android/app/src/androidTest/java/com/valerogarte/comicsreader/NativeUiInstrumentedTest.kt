@@ -41,15 +41,18 @@ class NativeUiInstrumentedTest {
         compose.runOnIdle { assertEquals(1, actions.imports) }
     }
 
-    @Test fun settingsCloseAndSystemBackDiscardChanges() {
+    @Test fun settingsCloseAndSystemBackPreserveAutomaticChanges() {
         openSettings()
+        compose.onNodeWithTag("save_settings").assertDoesNotExist()
         compose.onNodeWithText("Oscuro").performClick()
+        compose.runOnIdle { assertTrue(actions.state.settingsVisible); assertEquals("dark", actions.saved.single().theme) }
         compose.onNodeWithContentDescription("Cerrar").performClick()
-        compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertEquals("system", actions.state.settings.theme) }
+        compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertEquals("dark", actions.state.settings.theme) }
         openSettings()
-        compose.onNodeWithText("Sistema").assertIsSelected()
+        compose.onNodeWithText("Oscuro").assertIsSelected()
+        compose.onNodeWithText("Sistema").performClick()
         back()
-        compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertTrue(actions.saved.isEmpty()) }
+        compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertEquals("system", actions.state.settings.theme); assertEquals(listOf("dark", "system"), actions.saved.map { it.theme }) }
     }
 
     @Test fun serverEditorValidatesEmptyFieldsAndCancelsWithoutSaving() {
@@ -69,11 +72,10 @@ class NativeUiInstrumentedTest {
         field("Carpeta raíz", "/Books")
         compose.onNodeWithTag("apply_server").assertIsEnabled()
         compose.onNodeWithText("Cancelar").performClick()
-        compose.onNodeWithTag("save_settings").performClick()
-        compose.runOnIdle { assertEquals(2, actions.saved.single().sftpServers.size) }
+        compose.runOnIdle { assertEquals(2, actions.state.settings.sftpServers.size); assertTrue(actions.saved.isEmpty()); assertTrue(actions.state.settingsVisible) }
     }
 
-    @Test fun serverDraftAddsEditsDeletesAndCommitsOnlyOnGlobalSave() {
+    @Test fun serverEditorAddsEditsAndDeletesPersistImmediately() {
         openSettings()
         compose.onNodeWithTag("add_server").performScrollTo().performClick()
         field("Nombre del servidor", "Vacaciones")
@@ -82,7 +84,7 @@ class NativeUiInstrumentedTest {
         field("Contraseña", "fixture-password")
         field("Carpeta raíz", "/Comics")
         compose.onNodeWithTag("apply_server").performClick()
-        compose.runOnIdle { assertEquals(2, actions.state.settings.sftpServers.size); assertTrue(actions.saved.isEmpty()) }
+        compose.runOnIdle { assertEquals(3, actions.state.settings.sftpServers.size); assertEquals(3, actions.saved.single().sftpServers.size); assertTrue(actions.state.settingsVisible) }
         compose.onNodeWithTag("edit_server:nas").performScrollTo().performClick()
         field("Nombre del servidor", "NAS Casa")
         compose.onNodeWithTag("apply_server").performClick()
@@ -90,26 +92,28 @@ class NativeUiInstrumentedTest {
         compose.onNodeWithText("Los libros que hayas descargado se conservarán", substring = true).assertExists()
         compose.onNodeWithText("Borrar", substring = false).performClick()
         compose.onNodeWithTag("server_settings:backup").assertDoesNotExist()
-        compose.onNodeWithTag("save_settings").performClick()
         compose.runOnIdle {
-            val saved = actions.saved.single()
+            assertEquals(3, actions.saved.size)
+            assertTrue(actions.state.settingsVisible)
+            val saved = actions.saved.last()
             assertEquals(listOf("NAS Casa", "Vacaciones"), saved.sftpServers.map { it.name })
             assertEquals("nas", saved.sftpServers.first().id)
             assertEquals("/Comics", saved.sftpServers.last().rootPath)
         }
     }
 
-    @Test fun appliedServerDraftIsDiscardedWhenSettingsAreClosed() {
+    @Test fun deletedServerRemainsDeletedWhenSettingsAreReopened() {
         openSettings()
         compose.onNodeWithTag("delete_server:backup").performScrollTo().performClick()
         compose.onNodeWithText("Borrar", substring = false).performClick()
         compose.onNodeWithContentDescription("Cerrar").performClick()
         openSettings()
-        compose.onNodeWithTag("server_settings:backup").performScrollTo().assertIsDisplayed()
-        compose.runOnIdle { assertEquals(2, actions.state.settings.sftpServers.size); assertTrue(actions.saved.isEmpty()) }
+        compose.onNodeWithTag("server_settings:backup").assertDoesNotExist()
+        compose.onNodeWithTag("server_settings:nas").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf("nas"), actions.state.settings.sftpServers.map { it.id }); assertEquals(1, actions.saved.single().sftpServers.size) }
     }
 
-    @Test fun externalFontAndBackgroundUpdatesPreserveSettingsDraft() {
+    @Test fun externalFontAndBackgroundUpdatesSurviveAppearanceChanges() {
         openSettings()
         compose.onNodeWithText("Oscuro").performClick()
         compose.onNodeWithText("Añadir fuente TTF u OTF").performScrollTo().performClick()
@@ -118,8 +122,13 @@ class NativeUiInstrumentedTest {
             assertEquals(1, actions.fontImports); assertEquals(1, actions.backgroundImports)
             actions.state = actions.state.copy(settings = actions.state.settings.copy(fontPath = "/fixture.ttf", font = "custom", backgroundImagePath = "/fixture.png"))
         }
-        compose.onNodeWithTag("save_settings").performClick()
-        compose.runOnIdle { assertEquals("dark", actions.saved.single().theme); assertEquals("/fixture.ttf", actions.saved.single().fontPath) }
+        compose.onNodeWithText("Serif").performScrollTo().performClick()
+        compose.runOnIdle {
+            val saved = actions.saved.last()
+            assertEquals("dark", saved.theme); assertEquals("serif", saved.font)
+            assertEquals("/fixture.ttf", saved.fontPath); assertEquals("/fixture.png", saved.backgroundImagePath)
+            assertTrue(actions.state.settingsVisible)
+        }
     }
 
     @Test fun drawerSwitchesIndependentSftpSourcesAndBackReturnsToBooks() {
@@ -218,7 +227,10 @@ class NativeUiInstrumentedTest {
         compose.onNodeWithTag("reader_slider").performSemanticsAction(SemanticsActions.SetProgress) { action -> assertTrue(action(4f)) }
         compose.runOnIdle { assertEquals(4, actions.pages.last()) }
         compose.onNodeWithText("5 de 10").assertIsDisplayed()
-        compose.runOnIdle { actions.state = actions.state.copy(reader = actions.state.reader!!.copy(pageIndex = 9)) }
+        compose.runOnIdle {
+            val reader = actions.state.reader!!
+            actions.state = actions.state.copy(reader = reader.copy(pageIndex = 9, navigationRequest = reader.navigationRequest + 1))
+        }
         compose.onNodeWithContentDescription("Página siguiente").assertIsNotEnabled()
     }
 
@@ -291,6 +303,17 @@ class NativeUiInstrumentedTest {
         override fun onShowSettings() { state = state.copy(settingsVisible = true) }
         override fun onCloseSettings() { state = state.copy(settingsVisible = false) }
         override fun onSaveSettings(settings: UiSettings) { saved += settings; state = state.copy(settings = settings, settingsVisible = false) }
+        override fun onUpdateAppearanceSettings(update: (UiSettings) -> UiSettings) {
+            val latest = state.settings
+            val settings = update(latest).copy(sftpServers = latest.sftpServers)
+            saved += settings
+            state = state.copy(settings = settings)
+        }
+        override fun onUpdateSftpServers(update: (List<UiSftpServer>) -> List<UiSftpServer>) {
+            val settings = state.settings.copy(sftpServers = update(state.settings.sftpServers))
+            saved += settings
+            state = state.copy(settings = settings)
+        }
         override fun onImportBooks() { imports++ }
         override fun onImportFont() { fontImports++ }
         override fun onPickBackground() { backgroundImports++ }
@@ -303,8 +326,22 @@ class NativeUiInstrumentedTest {
         override fun onDownloadRemote(path: String) { downloads += state.selectedSftpServerId to path; state = state.copy(remoteEntries = state.remoteEntries.map { if (it.path == path) it.copy(downloaded = true) else it }) }
         override fun onDownloadAll() { downloadAll++; state = state.copy(remoteEntries = state.remoteEntries.map { it.copy(downloaded = true) }) }
         override fun onOpenBook(id: String) { openReader(id = id) }
-        fun openReader(page: Int = 0, id: String = "unread") { state = state.copy(reader = UiReaderState(id, "Lectura", pageIndex = page, pageCount = 10, bitmap = bitmap, reflowable = true)) }
-        override fun onReaderPage(pageIndex: Int) { pages += pageIndex; state = state.copy(reader = state.reader!!.copy(pageIndex = pageIndex)) }
+        fun openReader(page: Int = 0, id: String = "unread") { state = state.copy(reader = UiReaderState(id, "Lectura", pageIndex = page, pageCount = 10, bitmap = bitmap, reflowable = true, bitmapPageIndex = page)) }
+        override fun onReaderPage(pageIndex: Int) {
+            val reader = state.reader ?: return
+            pages += pageIndex
+            state = state.copy(reader = reader.copy(pageIndex = pageIndex, navigationRequest = reader.navigationRequest + 1))
+        }
+        override suspend fun loadReaderPage(bookId: String, sessionId: Int, pageIndex: Int): Bitmap? =
+            bitmap.takeIf { state.reader?.bookId == bookId && state.reader?.sessionId == sessionId }
+        override fun onReaderPosition(bookId: String, sessionId: Int, navigationRequest: Long, pageIndex: Int) {
+            val reader = state.reader ?: return
+            if (reader.bookId != bookId || reader.sessionId != sessionId || reader.navigationRequest != navigationRequest || reader.loading) return
+            if (reader.pageIndex != pageIndex) {
+                pages += pageIndex
+                state = state.copy(reader = reader.copy(pageIndex = pageIndex))
+            }
+        }
         override fun onCloseReader() { state = state.copy(reader = null) }
         override fun onAddBooksToShelf(ids: List<String>, name: String) { shelfBooks += ids to name; state = state.copy(shelves = state.shelves + UiShelf(name, name)) }
         override fun onCreateShelf(name: String) { createdShelves += name; state = state.copy(shelves = state.shelves + UiShelf(name, name)) }

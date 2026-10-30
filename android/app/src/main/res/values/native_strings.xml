@@ -5,6 +5,15 @@
     <string name="native_reading_mode">Modo de lectura</string>
     <string name="native_reading_horizontal">Horizontal</string>
     <string name="native_reading_vertical">Scroll vertical</string>
+    <string name="native_reader_transition">Efecto de transición</string>
+    <string name="native_transition_horizontal_only">Las transiciones se aplican en el modo horizontal.</string>
+    <string name="native_transition_none">Sin efecto</string>
+    <string name="native_transition_fade">Fundido</string>
+    <string name="native_transition_slide">Slider</string>
+    <string name="native_transition_page_turn">Pasar página</string>
+    <string name="native_transition_reveal">Revelar</string>
+    <string name="native_transition_zoom">Zoom suave</string>
+    <string name="native_retry">Reintentar</string>
     <string name="native_books">Libros</string>
     <string name="native_sftp_library">Biblioteca SFTP</string>
     <string name="native_shelves">Estanterías</string>

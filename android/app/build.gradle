@@ -25,8 +25,8 @@ android {
         applicationId 'com.valerogarte.comicsreader'
         minSdk 24
         targetSdk 36
-        versionCode 12
-        versionName '2.1.9'
+        versionCode 14
+        versionName '2.1.11'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         buildConfigField 'String', 'NAS_DEFAULT_JSON', groovy.json.JsonOutput.toJson(nasDefaultJson)
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }

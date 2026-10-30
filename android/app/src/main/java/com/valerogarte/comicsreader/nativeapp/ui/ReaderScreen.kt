@@ -3,22 +3,9 @@ package com.valerogarte.comicsreader.nativeapp.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.graphics.Bitmap
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -27,37 +14,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.valerogarte.comicsreader.R
-import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 private const val READER_LOADING_DELAY_MS = 1_000L
-private const val PAGE_TRANSITION_MS = 200
-
-private data class ReaderPageImage(val index: Int, val bitmap: Bitmap)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,8 +49,6 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
             loadingIndicatorVisible = true
         }
     }
-    var scale by remember(reader.bookId, reader.pageIndex) { mutableFloatStateOf(1f) }
-    var offset by remember(reader.bookId, reader.pageIndex) { mutableStateOf(Offset.Zero) }
     var sliderPosition by remember(reader.pageIndex) { mutableFloatStateOf(reader.pageIndex.toFloat()) }
     val context = LocalContext.current
     val pageCount = reader.pageCount.coerceAtLeast(1)
@@ -84,9 +59,6 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
     val canNavigate = !reader.loading && reader.error == null
     val previousPage = { if (canNavigate && pageIndex > 0) actions.onReaderPage(pageIndex - 1) }
     val nextPage = { if (canNavigate && pageIndex + 1 < pageCount) actions.onReaderPage(pageIndex + 1) }
-    fun navigateSide(right: Boolean) {
-        if (right != settings.rightToLeft) nextPage() else previousPage()
-    }
     DisposableEffect(context, settings.keepScreenOn) {
         val activity = context.findActivity()
         if (settings.keepScreenOn) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -102,58 +74,13 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                 resetZoomRequest = resetZoomRequest,
             )
         } else if (reader.bitmap != null) {
-            val transform = rememberTransformableState { zoomChange, panChange, _ ->
-                scale = (scale * zoomChange).coerceIn(1f, 6f)
-                offset = if (scale <= 1f) Offset.Zero else offset + panChange
-            }
-            var swipe by remember { mutableFloatStateOf(0f) }
-            val zoomLabel = stringResource(R.string.native_reader_zoom, (scale * 100).toInt())
-            Box(
-                Modifier.fillMaxSize().clipToBounds().testTag("reader_page").semantics { stateDescription = zoomLabel }
-                    .pointerInput(reader.bookId, pageIndex, pageCount, settings.rightToLeft, canNavigate) {
-                        detectTapGestures(
-                            onTap = { controlsVisible = !controlsVisible },
-                            onDoubleTap = { tap ->
-                                if (scale > 1f) { scale = 1f; offset = Offset.Zero }
-                                else { scale = 2.5f; offset = Offset((size.width / 2f - tap.x) * 1.5f, (size.height / 2f - tap.y) * 1.5f) }
-                            },
-                        )
-                    }
-                    .pointerInput(pageIndex, pageCount, settings.rightToLeft, scale, canNavigate) {
-                        if (scale <= 1.01f) detectHorizontalDragGestures(
-                            onDragStart = { swipe = 0f },
-                            onHorizontalDrag = { change, amount -> change.consume(); swipe += amount },
-                            onDragEnd = { if (canNavigate && abs(swipe) > 70.dp.toPx()) navigateSide(swipe < 0f) },
-                        )
-                    }
-                    .transformable(transform, canPan = { scale > 1f }),
-                contentAlignment = Alignment.Center,
-            ) {
-                key(reader.bookId) {
-                    AnimatedContent(
-                        targetState = ReaderPageImage(pageIndex, reader.bitmap),
-                        contentKey = { it.index },
-                        transitionSpec = {
-                            val direction = if ((targetState.index > initialState.index) != settings.rightToLeft) 1 else -1
-                            val enter = fadeIn(tween(PAGE_TRANSITION_MS)) + slideInHorizontally(
-                                tween(PAGE_TRANSITION_MS, easing = FastOutSlowInEasing),
-                            ) { width -> direction * width / 12 }
-                            val exit = slideOutHorizontally(
-                                tween(PAGE_TRANSITION_MS, easing = FastOutSlowInEasing),
-                            ) { width -> -direction * width / 12 }
-                            (enter togetherWith exit).using(null)
-                        },
-                        modifier = Modifier.fillMaxSize().graphicsLayer(
-                            scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y,
-                        ),
-                        label = "reader_page_transition",
-                    ) { page ->
-                        val image = remember(page.bitmap) { page.bitmap.asImageBitmap() }
-                        Image(image, if (page.index == pageIndex) reader.title else null,
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                    }
-                }
-            }
+            HorizontalReaderPages(
+                reader = reader,
+                settings = settings,
+                actions = actions,
+                onTap = { controlsVisible = !controlsVisible },
+                resetZoomRequest = resetZoomRequest,
+            )
         } else if (reader.text != null) {
             val scroll = rememberScrollState()
             LaunchedEffect(pageIndex) { scroll.scrollTo(0) }
@@ -186,7 +113,7 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                 title = { Text(reader.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { IconButton(onClick = actions::onCloseReader) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_close)) } },
                 actions = {
-                    if (reader.bitmap != null) IconButton(onClick = { scale = 1f; offset = Offset.Zero; resetZoomRequest++ }) { Icon(Icons.Default.FitScreen, stringResource(R.string.native_fit_page)) }
+                    if (reader.bitmap != null) IconButton(onClick = { resetZoomRequest++ }) { Icon(Icons.Default.FitScreen, stringResource(R.string.native_fit_page)) }
                     IconButton(onClick = { readerOptions = true }) { Icon(Icons.Default.Settings, stringResource(R.string.native_reader_settings)) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = .96f)),
@@ -221,6 +148,9 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                             ReaderMode.VERTICAL.name to stringResource(R.string.native_reading_vertical),
                         ),
                     ) { draft = draft.copy(readingMode = ReaderMode.valueOf(it)) }
+                    ReaderTransitionSetting(draft.readerTransition, draft.readingMode == ReaderMode.HORIZONTAL) {
+                        draft = draft.copy(readerTransition = it)
+                    }
                     if (reader.text != null || reader.reflowable) {
                         Text(stringResource(R.string.native_font_size, draft.fontSize.toInt()))
                         Slider(draft.fontSize.coerceIn(12f, 32f), onValueChange = { draft = draft.copy(fontSize = it) }, valueRange = 12f..32f)
@@ -232,9 +162,50 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { actions.onSaveSettings(draft); readerOptions = false }) { Text(stringResource(R.string.native_save)) } },
+            confirmButton = { TextButton(onClick = {
+                actions.onUpdateAppearanceSettings { current -> current.copy(
+                    font = draft.font, fontSize = draft.fontSize, keepScreenOn = draft.keepScreenOn,
+                    rightToLeft = draft.rightToLeft, readingMode = draft.readingMode, readerTransition = draft.readerTransition,
+                ) }
+                readerOptions = false
+            }) { Text(stringResource(R.string.native_save)) } },
             dismissButton = { TextButton(onClick = { readerOptions = false }) { Text(stringResource(R.string.native_cancel)) } },
         )
+    }
+}
+
+@Composable
+private fun ReaderTransitionSetting(value: ReaderTransition, enabled: Boolean, onChange: (ReaderTransition) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val choices = listOf(
+        ReaderTransition.NONE to stringResource(R.string.native_transition_none),
+        ReaderTransition.FADE to stringResource(R.string.native_transition_fade),
+        ReaderTransition.SLIDE to stringResource(R.string.native_transition_slide),
+        ReaderTransition.PAGE_TURN to stringResource(R.string.native_transition_page_turn),
+        ReaderTransition.REVEAL to stringResource(R.string.native_transition_reveal),
+        ReaderTransition.ZOOM to stringResource(R.string.native_transition_zoom),
+    )
+    Column {
+        Text(stringResource(R.string.native_reader_transition), style = MaterialTheme.typography.bodyMedium)
+        Box {
+            OutlinedButton(onClick = { expanded = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+                Text(choices.first { it.first == value }.second, Modifier.weight(1f))
+                Icon(Icons.Default.ArrowDropDown, null)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                choices.forEach { (effect, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        trailingIcon = { if (effect == value) Icon(Icons.Default.Check, null) },
+                        onClick = { onChange(effect); expanded = false },
+                    )
+                }
+            }
+        }
+        if (!enabled) {
+            Text(stringResource(R.string.native_transition_horizontal_only), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

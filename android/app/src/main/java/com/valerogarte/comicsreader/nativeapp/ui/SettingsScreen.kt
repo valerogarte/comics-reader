@@ -35,24 +35,15 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
-    var draft by remember { mutableStateOf(settings) }
     var editingServer by remember { mutableStateOf<UiSftpServer?>(null) }
     var deletingServer by remember { mutableStateOf<UiSftpServer?>(null) }
-    LaunchedEffect(settings.fontPath, settings.backgroundImagePath) {
-        draft = draft.copy(
-            fontPath = settings.fontPath,
-            backgroundImagePath = settings.backgroundImagePath,
-            font = if (settings.fontPath != draft.fontPath) settings.font else draft.font,
-        )
-    }
-    val validServers = draft.sftpServers.all(::validSftpServer)
+    val validServers = settings.sftpServers.all(::validSftpServer)
     Dialog(onDismissRequest = actions::onCloseSettings, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
             Scaffold(
                 topBar = { TopAppBar(
                     title = { Text(stringResource(R.string.native_settings)) },
                     navigationIcon = { IconButton(onClick = actions::onCloseSettings) { Icon(Icons.Default.Close, stringResource(R.string.native_close)) } },
-                    actions = { TextButton(onClick = { actions.onSaveSettings(draft) }, enabled = validServers, modifier = Modifier.testTag("save_settings")) { Text(stringResource(R.string.native_save)) } },
                 ) },
             ) { insets ->
                 Column(
@@ -60,30 +51,30 @@ internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.titleLarge)
-                    ChoiceRow(stringResource(R.string.native_theme), draft.theme,
-                        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark))) { draft = draft.copy(theme = it) }
-                    ChoiceRow(stringResource(R.string.native_background), draft.background,
-                        listOf("cream" to stringResource(R.string.native_cream), "white" to stringResource(R.string.native_white), "sepia" to stringResource(R.string.native_sepia))) { draft = draft.copy(background = it) }
+                    ChoiceRow(stringResource(R.string.native_theme), settings.theme,
+                        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark))) { value -> actions.onUpdateAppearanceSettings { it.copy(theme = value) } }
+                    ChoiceRow(stringResource(R.string.native_background), settings.background,
+                        listOf("cream" to stringResource(R.string.native_cream), "white" to stringResource(R.string.native_white), "sepia" to stringResource(R.string.native_sepia))) { value -> actions.onUpdateAppearanceSettings { it.copy(background = value) } }
                     OutlinedButton(onClick = actions::onPickBackground) { Text(stringResource(R.string.native_pick_background)) }
-                    if (draft.backgroundImagePath != null) {
-                        TextButton(onClick = { draft = draft.copy(backgroundImagePath = null) }) { Text(stringResource(R.string.native_remove_background)) }
+                    if (settings.backgroundImagePath != null) {
+                        TextButton(onClick = { actions.onUpdateAppearanceSettings { it.copy(backgroundImagePath = null) } }) { Text(stringResource(R.string.native_remove_background)) }
                     }
-                    ChoiceRow(stringResource(R.string.native_font), draft.font,
+                    ChoiceRow(stringResource(R.string.native_font), settings.font,
                         listOf("sans" to stringResource(R.string.native_sans), "serif" to stringResource(R.string.native_serif), "mono" to stringResource(R.string.native_mono)) +
-                            if (draft.fontPath != null) listOf("custom" to stringResource(R.string.native_custom_font)) else emptyList()) { draft = draft.copy(font = it) }
+                            if (settings.fontPath != null) listOf("custom" to stringResource(R.string.native_custom_font)) else emptyList()) { value -> actions.onUpdateAppearanceSettings { it.copy(font = value) } }
                     OutlinedButton(onClick = actions::onImportFont) { Text(stringResource(R.string.native_import_font)) }
                     Column {
-                        Text(stringResource(R.string.native_font_size, draft.fontSize.toInt()), style = MaterialTheme.typography.bodyMedium)
-                        Slider(value = draft.fontSize.coerceIn(12f, 32f), onValueChange = { draft = draft.copy(fontSize = it) }, valueRange = 12f..32f, steps = 19)
+                        Text(stringResource(R.string.native_font_size, settings.fontSize.toInt()), style = MaterialTheme.typography.bodyMedium)
+                        Slider(value = settings.fontSize.coerceIn(12f, 32f), onValueChange = { value -> actions.onUpdateAppearanceSettings { it.copy(fontSize = value) } }, valueRange = 12f..32f, steps = 19)
                     }
-                    SettingSwitch(stringResource(R.string.native_keep_screen_on), draft.keepScreenOn) { draft = draft.copy(keepScreenOn = it) }
-                    SettingSwitch(stringResource(R.string.native_right_to_left), draft.rightToLeft) { draft = draft.copy(rightToLeft = it) }
+                    SettingSwitch(stringResource(R.string.native_keep_screen_on), settings.keepScreenOn) { value -> actions.onUpdateAppearanceSettings { it.copy(keepScreenOn = value) } }
+                    SettingSwitch(stringResource(R.string.native_right_to_left), settings.rightToLeft) { value -> actions.onUpdateAppearanceSettings { it.copy(rightToLeft = value) } }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Text(stringResource(R.string.native_sftp_servers), style = MaterialTheme.typography.titleLarge)
                     Text(stringResource(R.string.native_sftp_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!validServers) Text(stringResource(R.string.native_invalid_servers), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    if (draft.sftpServers.isEmpty()) Text(stringResource(R.string.native_no_sftp_servers), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    draft.sftpServers.forEach { server ->
+                    if (settings.sftpServers.isEmpty()) Text(stringResource(R.string.native_no_sftp_servers), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    settings.sftpServers.forEach { server ->
                         OutlinedCard(Modifier.fillMaxWidth().testTag("server_settings:${server.id}")) {
                             Row(Modifier.fillMaxWidth().clickable { editingServer = server }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.primary)
@@ -109,8 +100,10 @@ internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
         SftpServerEditor(initial,
             onDismiss = { editingServer = null },
             onApply = { server ->
-                val exists = draft.sftpServers.any { it.id == server.id }
-                draft = draft.copy(sftpServers = if (exists) draft.sftpServers.map { if (it.id == server.id) server else it } else draft.sftpServers + server)
+                actions.onUpdateSftpServers { servers ->
+                    if (servers.any { it.id == server.id }) servers.map { if (it.id == server.id) server else it }
+                    else servers + server
+                }
                 editingServer = null
             },
         )
@@ -121,7 +114,7 @@ internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
             title = { Text(stringResource(R.string.native_delete_sftp_server)) },
             text = { Text(stringResource(R.string.native_delete_sftp_server_message, server.name)) },
             confirmButton = { TextButton(onClick = {
-                draft = draft.copy(sftpServers = draft.sftpServers.filterNot { it.id == server.id })
+                actions.onUpdateSftpServers { servers -> servers.filterNot { it.id == server.id } }
                 deletingServer = null
             }) { Text(stringResource(R.string.native_delete), color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deletingServer = null }) { Text(stringResource(R.string.native_cancel)) } },
