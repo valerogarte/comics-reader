@@ -774,7 +774,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private fun mapRemote(folder: RemoteFolder, browser: RemoteBrowser): List<UiRemoteEntry> = folder.entries.map { entry ->
         val book = downloadedBooks[folder.sourceId to entry.path]
-        UiRemoteEntry(entry.path, entry.name, entry.isDirectory, entry.title, entry.format, entry.size, entry.coverPath,
+        UiRemoteEntry(entry.path, entry.name, entry.isDirectory, entry.title, entry.format, entry.size,
+            entry.coverPath ?: book?.coverPath,
             downloaded = book != null, downloading = entry.path in browser.transferringPaths, progress = book?.let(::progress) ?: 0f,
             fileCount = entry.fileCount)
     }
