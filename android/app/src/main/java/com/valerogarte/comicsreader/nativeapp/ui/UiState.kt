@@ -1,6 +1,7 @@
 package com.valerogarte.comicsreader.nativeapp.ui
 
 import android.graphics.Bitmap
+import com.valerogarte.comicsreader.nativeapp.reader.ReadingFonts
 
 enum class LibraryDestination { BOOKS, SFTP, SHELF }
 enum class ReadFilter { ALL, UNREAD, READING, FINISHED }
@@ -57,7 +58,7 @@ data class UiRemoteEntry(
 data class UiSettings(
     val theme: String = "system",
     val background: String = "cream",
-    val font: String = "sans",
+    val font: String = ReadingFonts.DEFAULT_ID,
     val fontSize: Float = 18f,
     val fontPath: String? = null,
     val backgroundImagePath: String? = null,

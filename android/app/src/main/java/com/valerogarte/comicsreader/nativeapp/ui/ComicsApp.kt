@@ -45,8 +45,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -570,13 +568,6 @@ private fun fileDetails(format: String, bytes: Long): String {
     while (value >= 1024 && unit < units.lastIndex) { value /= 1024; unit++ }
     val size = "${DecimalFormat(if (value < 10 && unit > 0) "0.#" else "0").format(value)} ${units[unit]}"
     return if (extension.isBlank()) size else "$extension · $size"
-}
-
-internal fun readerFont(settings: UiSettings): FontFamily = when (settings.font) {
-    "custom" -> settings.fontPath?.let { path -> runCatching { FontFamily(Font(File(path))) }.getOrNull() } ?: FontFamily.SansSerif
-    "serif" -> FontFamily.Serif
-    "mono" -> FontFamily.Monospace
-    else -> FontFamily.SansSerif
 }
 
 internal fun readerBackground(settings: UiSettings, dark: Boolean): Color = if (dark) Color(0xFF181715) else when (settings.background) {

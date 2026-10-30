@@ -8,17 +8,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -32,66 +40,111 @@ import androidx.compose.ui.window.DialogProperties
 import com.valerogarte.comicsreader.R
 import java.util.UUID
 
+private enum class SettingsSection(val id: String, val title: Int, val summary: Int, val icon: ImageVector) {
+    APPEARANCE("appearance", R.string.native_appearance, R.string.native_settings_appearance_summary, Icons.Default.Palette),
+    TYPOGRAPHY("typography", R.string.native_font, R.string.native_settings_typography_summary, Icons.Default.TextFields),
+    READING("reading", R.string.native_settings_reading, R.string.native_settings_reading_summary, Icons.AutoMirrored.Filled.MenuBook),
+    SFTP("sftp", R.string.native_sftp_servers, R.string.native_settings_sftp_summary, Icons.Default.Storage),
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    val sectionStates = rememberSaveableStateHolder()
     var editingServer by remember { mutableStateOf<UiSftpServer?>(null) }
     var deletingServer by remember { mutableStateOf<UiSftpServer?>(null) }
     val validServers = settings.sftpServers.all(::validSftpServer)
-    Dialog(onDismissRequest = actions::onCloseSettings, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    val goBack = { if (section == null) actions.onCloseSettings() else section = null }
+    Dialog(onDismissRequest = goBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
             Scaffold(
                 topBar = { TopAppBar(
-                    title = { Text(stringResource(R.string.native_settings)) },
-                    navigationIcon = { IconButton(onClick = actions::onCloseSettings) { Icon(Icons.Default.Close, stringResource(R.string.native_close)) } },
-                ) },
-            ) { insets ->
-                Column(
-                    Modifier.fillMaxSize().padding(insets).testTag("settings_scroll").verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.titleLarge)
-                    ChoiceRow(stringResource(R.string.native_theme), settings.theme,
-                        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark))) { value -> actions.onUpdateAppearanceSettings { it.copy(theme = value) } }
-                    ChoiceRow(stringResource(R.string.native_background), settings.background,
-                        listOf("cream" to stringResource(R.string.native_cream), "white" to stringResource(R.string.native_white), "sepia" to stringResource(R.string.native_sepia))) { value -> actions.onUpdateAppearanceSettings { it.copy(background = value) } }
-                    OutlinedButton(onClick = actions::onPickBackground) { Text(stringResource(R.string.native_pick_background)) }
-                    if (settings.backgroundImagePath != null) {
-                        TextButton(onClick = { actions.onUpdateAppearanceSettings { it.copy(backgroundImagePath = null) } }) { Text(stringResource(R.string.native_remove_background)) }
-                    }
-                    ChoiceRow(stringResource(R.string.native_font), settings.font,
-                        listOf("sans" to stringResource(R.string.native_sans), "serif" to stringResource(R.string.native_serif), "mono" to stringResource(R.string.native_mono)) +
-                            if (settings.fontPath != null) listOf("custom" to stringResource(R.string.native_custom_font)) else emptyList()) { value -> actions.onUpdateAppearanceSettings { it.copy(font = value) } }
-                    OutlinedButton(onClick = actions::onImportFont) { Text(stringResource(R.string.native_import_font)) }
-                    Column {
-                        Text(stringResource(R.string.native_font_size, settings.fontSize.toInt()), style = MaterialTheme.typography.bodyMedium)
-                        Slider(value = settings.fontSize.coerceIn(12f, 32f), onValueChange = { value -> actions.onUpdateAppearanceSettings { it.copy(fontSize = value) } }, valueRange = 12f..32f, steps = 19)
-                    }
-                    SettingSwitch(stringResource(R.string.native_keep_screen_on), settings.keepScreenOn) { value -> actions.onUpdateAppearanceSettings { it.copy(keepScreenOn = value) } }
-                    SettingSwitch(stringResource(R.string.native_right_to_left), settings.rightToLeft) { value -> actions.onUpdateAppearanceSettings { it.copy(rightToLeft = value) } }
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    Text(stringResource(R.string.native_sftp_servers), style = MaterialTheme.typography.titleLarge)
-                    Text(stringResource(R.string.native_sftp_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (!validServers) Text(stringResource(R.string.native_invalid_servers), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    if (settings.sftpServers.isEmpty()) Text(stringResource(R.string.native_no_sftp_servers), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    settings.sftpServers.forEach { server ->
-                        OutlinedCard(Modifier.fillMaxWidth().testTag("server_settings:${server.id}")) {
-                            Row(Modifier.fillMaxWidth().clickable { editingServer = server }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.primary)
-                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-                                    Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text("${server.host}:${server.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(server.rootPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                IconButton(onClick = { editingServer = server }, modifier = Modifier.testTag("edit_server:${server.id}")) { Icon(Icons.Default.Edit, stringResource(R.string.native_edit_sftp_server)) }
-                                IconButton(onClick = { deletingServer = server }, modifier = Modifier.testTag("delete_server:${server.id}")) { Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_sftp_server)) }
+                    title = { Text(stringResource(section?.title ?: R.string.native_settings)) },
+                    navigationIcon = {
+                        if (section == null) {
+                            IconButton(onClick = actions::onCloseSettings) { Icon(Icons.Default.Close, stringResource(R.string.native_close)) }
+                        } else {
+                            IconButton(onClick = goBack, modifier = Modifier.testTag("settings_back")) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_settings_back))
                             }
                         }
+                    },
+                    actions = {
+                        if (section != null) IconButton(onClick = actions::onCloseSettings) {
+                            Icon(Icons.Default.Close, stringResource(R.string.native_close))
+                        }
+                    },
+                ) },
+            ) { insets ->
+                Box(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets).imePadding(), contentAlignment = Alignment.TopCenter) {
+                    sectionStates.SaveableStateProvider(section?.id ?: "menu") {
+                        Column(
+                            Modifier.widthIn(max = 720.dp).fillMaxWidth().fillMaxHeight().testTag("settings_scroll")
+                                .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            when (section) {
+                                null -> SettingsSection.entries.forEach { destination ->
+                                    OutlinedCard(onClick = { section = destination }, modifier = Modifier.fillMaxWidth().testTag("settings_section:${destination.id}")) {
+                                        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(destination.icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Column(Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text(stringResource(destination.title), style = MaterialTheme.typography.titleMedium)
+                                                Text(stringResource(destination.summary), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Icon(Icons.AutoMirrored.Filled.NavigateNext, null)
+                                        }
+                                    }
+                                }
+                                SettingsSection.APPEARANCE -> {
+                                    ChoiceRow(stringResource(R.string.native_theme), settings.theme,
+                                        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark))) { value -> actions.onUpdateAppearanceSettings { it.copy(theme = value) } }
+                                    ChoiceRow(stringResource(R.string.native_background), settings.background,
+                                        listOf("cream" to stringResource(R.string.native_cream), "white" to stringResource(R.string.native_white), "sepia" to stringResource(R.string.native_sepia))) { value -> actions.onUpdateAppearanceSettings { it.copy(background = value) } }
+                                    OutlinedButton(onClick = actions::onPickBackground) { Text(stringResource(R.string.native_pick_background)) }
+                                    if (settings.backgroundImagePath != null) {
+                                        TextButton(onClick = { actions.onUpdateAppearanceSettings { it.copy(backgroundImagePath = null) } }) { Text(stringResource(R.string.native_remove_background)) }
+                                    }
+                                }
+                                SettingsSection.TYPOGRAPHY -> {
+                                    ReadingFontSelector(settings) { value -> actions.onUpdateAppearanceSettings { it.copy(font = value) } }
+                                    OutlinedButton(onClick = actions::onImportFont) { Text(stringResource(R.string.native_import_font)) }
+                                    Column {
+                                        Text(stringResource(R.string.native_font_size, settings.fontSize.toInt()), style = MaterialTheme.typography.bodyMedium)
+                                        Slider(value = settings.fontSize.coerceIn(12f, 32f), onValueChange = { value -> actions.onUpdateAppearanceSettings { it.copy(fontSize = value) } }, valueRange = 12f..32f, steps = 19)
+                                    }
+                                }
+                                SettingsSection.READING -> {
+                                    SettingSwitch(stringResource(R.string.native_keep_screen_on), settings.keepScreenOn) { value -> actions.onUpdateAppearanceSettings { it.copy(keepScreenOn = value) } }
+                                    SettingSwitch(stringResource(R.string.native_right_to_left), settings.rightToLeft) { value -> actions.onUpdateAppearanceSettings { it.copy(rightToLeft = value) } }
+                                }
+                                SettingsSection.SFTP -> {
+                                    Text(stringResource(R.string.native_sftp_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (!validServers) Text(stringResource(R.string.native_invalid_servers), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                    if (settings.sftpServers.isEmpty()) Text(stringResource(R.string.native_no_sftp_servers), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    settings.sftpServers.forEach { server ->
+                                        OutlinedCard(Modifier.fillMaxWidth().testTag("server_settings:${server.id}")) {
+                                            Row(Modifier.fillMaxWidth().clickable { editingServer = server }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Storage, null, tint = MaterialTheme.colorScheme.primary)
+                                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                                                    Text(server.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                    Text("${server.host}:${server.port}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    Text(server.rootPath, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                }
+                                                IconButton(onClick = { editingServer = server }, modifier = Modifier.testTag("edit_server:${server.id}")) { Icon(Icons.Default.Edit, stringResource(R.string.native_edit_sftp_server)) }
+                                                IconButton(onClick = { deletingServer = server }, modifier = Modifier.testTag("delete_server:${server.id}")) { Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_sftp_server)) }
+                                            }
+                                        }
+                                    }
+                                    OutlinedButton(modifier = Modifier.testTag("add_server"), onClick = {
+                                        editingServer = UiSftpServer(UUID.randomUUID().toString(), "", "", username = "", password = "")
+                                    }) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_add_sftp_server)) }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
-                    OutlinedButton(modifier = Modifier.testTag("add_server"), onClick = {
-                        editingServer = UiSftpServer(UUID.randomUUID().toString(), "", "", username = "", password = "")
-                    }) { Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_add_sftp_server)) }
-                    Spacer(Modifier.height(24.dp))
                 }
             }
         }

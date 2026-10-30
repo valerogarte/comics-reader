@@ -70,6 +70,12 @@
     <string name="native_empty_shelf_question">¿Quieres borrar también la estantería?</string>
     <string name="native_keep_shelf">Conservar</string>
     <string name="native_appearance">Apariencia</string>
+    <string name="native_settings_reading">Lectura</string>
+    <string name="native_settings_appearance_summary">Tema y fondo de lectura</string>
+    <string name="native_settings_typography_summary">Fuentes y tamaño del texto</string>
+    <string name="native_settings_reading_summary">Pantalla y dirección de lectura</string>
+    <string name="native_settings_sftp_summary">Gestiona tus servidores y bibliotecas</string>
+    <string name="native_settings_back">Volver a Configuración</string>
     <string name="native_theme">Tema</string>
     <string name="native_system">Sistema</string>
     <string name="native_light">Claro</string>
@@ -79,6 +85,8 @@
     <string name="native_white">Blanco</string>
     <string name="native_sepia">Sepia</string>
     <string name="native_font">Tipografía</string>
+    <string name="native_font_default">Predeterminada</string>
+    <string name="native_font_preview">El próximo capítulo comienza aquí. ¿Seguimos leyendo?</string>
     <string name="native_sans">Sencilla</string>
     <string name="native_serif">Clásica</string>
     <string name="native_mono">Monoespaciada</string>

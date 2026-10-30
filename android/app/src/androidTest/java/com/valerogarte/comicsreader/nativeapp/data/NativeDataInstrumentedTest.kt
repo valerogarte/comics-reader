@@ -262,7 +262,7 @@ class NativeDataInstrumentedTest {
         val entry = folder.entries.first()
         val book = repository.downloadRemote(a.profileId, entry)
         assertTrue(File(book.localPath).isFile)
-        assertEquals("library/Comics/DC/Sandman", book.shelfName)
+        assertEquals("Comics/DC/Sandman", book.shelfName)
         assertTrue(book.coverPath != entry.coverPath)
         assertTrue(book.coverPath?.let { File(it).isFile } == true)
         val reads = control("stats").getJSONObject("qaA").getJSONArray("reads").length()

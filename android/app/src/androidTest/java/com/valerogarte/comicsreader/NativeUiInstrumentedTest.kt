@@ -42,21 +42,24 @@ class NativeUiInstrumentedTest {
     }
 
     @Test fun settingsCloseAndSystemBackPreserveAutomaticChanges() {
-        openSettings()
+        openSettings("appearance")
         compose.onNodeWithTag("save_settings").assertDoesNotExist()
         compose.onNodeWithText("Oscuro").performClick()
         compose.runOnIdle { assertTrue(actions.state.settingsVisible); assertEquals("dark", actions.saved.single().theme) }
         compose.onNodeWithContentDescription("Cerrar").performClick()
         compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertEquals("dark", actions.state.settings.theme) }
-        openSettings()
+        openSettings("appearance")
         compose.onNodeWithText("Oscuro").assertIsSelected()
         compose.onNodeWithText("Sistema").performClick()
+        back()
+        compose.onNodeWithTag("settings_section:appearance").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(actions.state.settingsVisible) }
         back()
         compose.runOnIdle { assertFalse(actions.state.settingsVisible); assertEquals("system", actions.state.settings.theme); assertEquals(listOf("dark", "system"), actions.saved.map { it.theme }) }
     }
 
     @Test fun serverEditorValidatesEmptyFieldsAndCancelsWithoutSaving() {
-        openSettings()
+        openSettings("sftp")
         compose.onNodeWithTag("add_server").performScrollTo().performClick()
         compose.onNodeWithTag("apply_server").assertIsNotEnabled()
         field("Nombre del servidor", "Nuevo")
@@ -76,7 +79,7 @@ class NativeUiInstrumentedTest {
     }
 
     @Test fun serverEditorAddsEditsAndDeletesPersistImmediately() {
-        openSettings()
+        openSettings("sftp")
         compose.onNodeWithTag("add_server").performScrollTo().performClick()
         field("Nombre del servidor", "Vacaciones")
         field("Servidor o dirección IP", "192.0.2.10")
@@ -103,26 +106,31 @@ class NativeUiInstrumentedTest {
     }
 
     @Test fun deletedServerRemainsDeletedWhenSettingsAreReopened() {
-        openSettings()
+        openSettings("sftp")
         compose.onNodeWithTag("delete_server:backup").performScrollTo().performClick()
         compose.onNodeWithText("Borrar", substring = false).performClick()
         compose.onNodeWithContentDescription("Cerrar").performClick()
-        openSettings()
+        openSettings("sftp")
         compose.onNodeWithTag("server_settings:backup").assertDoesNotExist()
         compose.onNodeWithTag("server_settings:nas").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertEquals(listOf("nas"), actions.state.settings.sftpServers.map { it.id }); assertEquals(1, actions.saved.single().sftpServers.size) }
     }
 
     @Test fun externalFontAndBackgroundUpdatesSurviveAppearanceChanges() {
-        openSettings()
+        openSettings("appearance")
         compose.onNodeWithText("Oscuro").performClick()
+        switchSettingsSection("typography")
         compose.onNodeWithText("Añadir fuente TTF u OTF").performScrollTo().performClick()
+        switchSettingsSection("appearance")
         compose.onNodeWithText("Elegir imagen de fondo").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(1, actions.fontImports); assertEquals(1, actions.backgroundImports)
             actions.state = actions.state.copy(settings = actions.state.settings.copy(fontPath = "/fixture.ttf", font = "custom", backgroundImagePath = "/fixture.png"))
         }
-        compose.onNodeWithText("Serif").performScrollTo().performClick()
+        switchSettingsSection("typography")
+        compose.onNodeWithTag("reading_font_selector").performScrollTo().performClick()
+        compose.onNodeWithTag("reading_font_choices").performScrollToNode(hasTestTag("reading_font:serif"))
+        compose.onNodeWithTag("reading_font:serif").performClick()
         compose.runOnIdle {
             val saved = actions.saved.last()
             assertEquals("dark", saved.theme); assertEquals("serif", saved.font)
@@ -280,7 +288,14 @@ class NativeUiInstrumentedTest {
         compose.onNodeWithTag("reader_page").assertIsDisplayed()
     }
 
-    private fun openSettings() { compose.onNodeWithContentDescription("Configuración").performClick() }
+    private fun openSettings(section: String? = null) {
+        compose.onNodeWithContentDescription("Configuración").performClick()
+        if (section != null) compose.onNodeWithTag("settings_section:$section").performScrollTo().performClick()
+    }
+    private fun switchSettingsSection(section: String) {
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_section:$section").performScrollTo().performClick()
+    }
     private fun field(label: String, value: String) { compose.onNode(hasSetTextAction() and hasText(label)).performScrollTo().performTextReplacement(value) }
     private fun back() { Espresso.pressBack(); compose.waitForIdle() }
 

@@ -93,6 +93,19 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         check(writableDatabase.update("books", ContentValues().apply { put("shelf_name", name) }, "id=?", arrayOf(id)) == 1) { "Book no longer exists" }
     }
 
+    data class ShelfRename(val bookId: String, val previousName: String, val name: String)
+
+    fun renameBookShelves(renames: List<ShelfRename>) = transaction {
+        renames.forEach { rename ->
+            createShelf(rename.name)
+            check(writableDatabase.update("books", ContentValues().apply { put("shelf_name", rename.name) },
+                "id=? AND shelf_name=?", arrayOf(rename.bookId, rename.previousName)) == 1) { "Book shelf changed" }
+        }
+        renames.map { it.previousName }.distinct().forEach { name ->
+            writableDatabase.delete("shelves", "name=? AND NOT EXISTS (SELECT 1 FROM books WHERE shelf_name=?)", arrayOf(name, name))
+        }
+    }
+
     fun linkSource(id: String, sourceId: String, path: String, shelf: String) = transaction {
         createShelf(shelf)
         writableDatabase.update("books", ContentValues().apply {

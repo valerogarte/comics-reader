@@ -154,7 +154,7 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                     if (reader.text != null || reader.reflowable) {
                         Text(stringResource(R.string.native_font_size, draft.fontSize.toInt()))
                         Slider(draft.fontSize.coerceIn(12f, 32f), onValueChange = { draft = draft.copy(fontSize = it) }, valueRange = 12f..32f)
-                        ChoiceRow(stringResource(R.string.native_font), draft.font, listOf("sans" to stringResource(R.string.native_sans), "serif" to stringResource(R.string.native_serif), "mono" to stringResource(R.string.native_mono))) { draft = draft.copy(font = it) }
+                        ReadingFontSelector(draft) { draft = draft.copy(font = it) }
                     }
                     SettingSwitch(stringResource(R.string.native_keep_screen_on), draft.keepScreenOn) { draft = draft.copy(keepScreenOn = it) }
                     if (draft.readingMode == ReaderMode.HORIZONTAL) {

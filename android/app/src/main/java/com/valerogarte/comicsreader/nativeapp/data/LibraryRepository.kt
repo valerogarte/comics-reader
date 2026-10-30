@@ -79,7 +79,13 @@ class LibraryRepository(context: Context) : Closeable {
         mutation.withLock { database.deleteShelf(name) }
     }
 
-    suspend fun loadSftpConfigs(): List<SftpConfig> = withContext(Dispatchers.IO) { configuration.loadAll() }
+    suspend fun loadSftpConfigs(): List<SftpConfig> = withContext(Dispatchers.IO) {
+        configurationMutation.withLock {
+            val configs = configuration.loadAll()
+            mutation.withLock { migrateSftpShelfNames(configs) }
+            configs
+        }
+    }
 
     /** The list changes atomically. Only changed connection profiles wait for their own operations. */
     suspend fun saveSftpConfigs(configs: List<SftpConfig>) = withContext(Dispatchers.IO) {
@@ -582,10 +588,27 @@ class LibraryRepository(context: Context) : Closeable {
 
     private fun SftpConfig.credentials() = SftpClient.Credentials(host, port, username, password)
 
-    private fun shelfFor(config: SftpConfig, remotePath: String): String {
-        val rootNames = normalizePath(config.rootPath).trim('/')
-        val parentNames = remotePath.substringBeforeLast('/', "").trim('/')
-        return listOf(rootNames, parentNames).filter { it.isNotEmpty() }.joinToString("/").ifEmpty { config.host }
+    private fun shelfFor(config: SftpConfig, remotePath: String): String =
+        normalizePath(remotePath).substringBeforeLast('/', "").trim('/')
+            .ifEmpty { config.name.ifBlank { config.host } }
+
+    private fun migrateSftpShelfNames(configs: List<SftpConfig>) {
+        if (configs.isEmpty()) return
+        val sources = configs.associateBy { it.id }
+        val renames = database.books().groupBy { it.shelfName }.flatMap { (name, books) ->
+            if (name == null) return@flatMap emptyList()
+            val candidates = books.mapNotNull { book ->
+                val config = sources[book.sourceId] ?: return@mapNotNull null
+                val path = book.remotePath ?: return@mapNotNull null
+                val previous = listOf(normalizePath(config.rootPath).trim('/'), path.substringBeforeLast('/', "").trim('/'))
+                    .filter { it.isNotEmpty() }.joinToString("/").ifEmpty { config.host }
+                val relative = shelfFor(config, path)
+                if (name == previous && name != relative) LibraryDatabase.ShelfRename(book.id, name, relative) else null
+            }
+            // Mixed/manual shelves and books from removed sources keep their existing organization.
+            if (candidates.size == books.size) candidates else emptyList()
+        }
+        if (renames.isNotEmpty()) database.renameBookShelves(renames)
     }
 
     private fun validShelfName(name: String) = name.trim().also {

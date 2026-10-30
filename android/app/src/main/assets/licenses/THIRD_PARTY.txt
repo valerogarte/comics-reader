@@ -19,3 +19,12 @@ La aplicación conserva la licencia AGPL-3.0 del proyecto original. El código d
 Las fuentes C/C++ y Rust usadas para DjVu, MOBI y CAJ están incluidas en `android/app/src/main/`, con sus avisos. Los archivos `cpp/vendor/README.md` y `rust/README.md` registran procedencia, versión y hashes de los paquetes originales. Las dependencias Rust restantes están fijadas con sus checksums en `rust/comics-caj/Cargo.lock`.
 
 El código original web y de escritorio no se empaqueta en el APK nativo.
+
+## Tipografías de lectura
+
+Literata, Lora, Merriweather, Source Serif 4, Noto Serif, EB Garamond,
+Libre Baskerville, Crimson Pro, Atkinson Hyperlegible, Source Sans 3,
+Noto Sans, Lexend, Nunito Sans y Roboto Mono se distribuyen bajo SIL Open
+Font License 1.1, con los avisos y licencias originales de cada familia en
+`assets/fonts/licenses/`. Son archivos TTF Regular 400 oficiales sin modificar.
+`assets/fonts/MANIFEST.json` registra su procedencia y sus huellas SHA-256.
