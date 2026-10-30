@@ -20,6 +20,8 @@ El catálogo remoto no guarda archivos completos. Las fichas aparecen tras lista
 
 Las vistas previas transfieren únicamente rangos parciales, con un límite de 16 MiB por libro, y reutilizan en memoria los fragmentos ya leídos. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero. Las carpetas guardadas siguen abriéndose desde la caché hasta que se pulsa **Sincronizar**.
 
+En los archivos CBR con RAR4 o RAR5 no sólido, cuando su estructura lo permite, se leen las cabeceras por separado y solo se extraen la portada y los metadatos necesarios. Los fallos temporales de conexión se reintentan al sincronizar; los formatos que no pueden obtenerse con la lectura parcial se conservan en caché hasta que cambie el archivo o el extractor.
+
 Cada carpeta SFTP muestra, cuando se puede consultar, el número de archivos que contiene directamente, de cualquier formato, sin sumar los de sus subcarpetas. El recuento se completa en segundo plano, se guarda en caché y se actualiza con **Sincronizar**. Si el servidor no permite obtenerlo, aparece «Recuento no disponible».
 
 ## Datos

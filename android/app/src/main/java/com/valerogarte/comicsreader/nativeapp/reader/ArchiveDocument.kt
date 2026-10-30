@@ -2,7 +2,6 @@ package com.valerogarte.comicsreader.nativeapp.reader
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.artifex.mupdf.fitz.SeekableInputStream
 import me.zhanghai.android.libarchive.Archive
 import me.zhanghai.android.libarchive.ArchiveEntry
 import me.zhanghai.android.libarchive.ArchiveException
@@ -16,7 +15,7 @@ import kotlin.math.min
 internal data class ArchiveItem(val name: String, val size: Long)
 
 /** libarchive is native code and handles ZIP, TAR, RAR/RAR5 and 7z without JavaScript. */
-internal class BookArchive(private val file: File? = null, private val remote: RemoteInput? = null) {
+internal class BookArchive(private val file: File? = null, private val remote: ArchiveInput? = null) {
     private fun <T> withArchive(block: (Long) -> T): T {
         val archive = Archive.readNew()
         try {
@@ -27,10 +26,10 @@ internal class BookArchive(private val file: File? = null, private val remote: R
             } else {
                 val source = remote ?: throw IOException("Archivo no disponible")
                 source.seek(0, 0)
-                val buffer = ByteBuffer.allocateDirect(64 * 1024)
+                val buffer = ByteBuffer.allocateDirect(source.readBufferSize)
                 val bytes = ByteArray(buffer.capacity())
                 Archive.readSetCallbackData(archive, source)
-                Archive.readSetReadCallback<RemoteInput>(archive) { _, input ->
+                Archive.readSetReadCallback<ArchiveInput>(archive) { _, input ->
                     try {
                         val count = input.read(bytes)
                         if (count < 0) null else {
@@ -41,11 +40,11 @@ internal class BookArchive(private val file: File? = null, private val remote: R
                         }
                     } catch (error: IOException) { throw ArchiveException(Archive.ERRNO_FATAL, error.message, error) }
                 }
-                Archive.readSetSeekCallback<RemoteInput>(archive) { _, input, offset, whence ->
+                Archive.readSetSeekCallback<ArchiveInput>(archive) { _, input, offset, whence ->
                     try { input.seek(offset, whence) }
                     catch (error: IOException) { throw ArchiveException(Archive.ERRNO_FATAL, error.message, error) }
                 }
-                Archive.readSetSkipCallback<RemoteInput>(archive) { _, input, requested ->
+                Archive.readSetSkipCallback<ArchiveInput>(archive) { _, input, requested ->
                     try {
                         val before = input.position()
                         input.seek(min(input.size, before + requested.coerceAtLeast(0)), 0) - before

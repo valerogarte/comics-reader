@@ -3,28 +3,49 @@ package com.valerogarte.comicsreader.nativeapp.reader
 import com.artifex.mupdf.fitz.SeekableInputStream
 import java.io.IOException
 import java.util.TreeMap
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.min
 
 fun interface RangeSource {
     fun read(offset: Long, length: Int): ByteArray
 }
 
+internal interface ArchiveInput : SeekableInputStream {
+    val size: Long
+    val readBufferSize: Int get() = 64 * 1024
+}
+
+internal class PreviewTimeoutException : IOException("Tiempo de vista previa agotado")
+internal class PreviewLimitException : IOException("Límite de lectura de vista previa alcanzado")
+internal class PreviewRangeException : IOException("Rango de vista previa inválido")
+internal class PreviewIncompleteException : IOException("Lectura SFTP incompleta")
+
 /** A memory-only preview transport. It cannot fetch a complete remote document. */
-internal class RemoteInput(val size: Long, private val source: RangeSource) : SeekableInputStream {
+internal class RemoteInput(override val size: Long, private val source: RangeSource) : ArchiveInput {
     private var cursor = 0L
     private var transferred = 0L
     private val limit = min(16L * 1024 * 1024, (size - 1).coerceAtLeast(0))
     private val deadline = System.nanoTime() + 30_000_000_000L
     private val cached = TreeMap<Long, ByteArray>()
+    private val failure = AtomicReference<IOException?>(null)
+
+    fun failure(): IOException? = failure.get()
+
+    private fun fail(error: IOException): Nothing {
+        failure.compareAndSet(null, error)
+        throw error
+    }
+
+    private fun fail(message: String): Nothing = fail(IOException(message))
 
     @Synchronized
     fun bytes(offset: Long, length: Int): ByteArray {
         checkAvailable()
         if (length < 0 || offset < 0 || offset > size || length.toLong() > size - offset) {
-            throw IOException("Rango fuera del documento")
+            fail(PreviewRangeException())
         }
         if (length == 0) return ByteArray(0)
-        if (length > 4 * 1024 * 1024) throw IOException("Rango de vista previa demasiado grande")
+        if (length > 4 * 1024 * 1024) fail(PreviewRangeException())
         val end = offset + length
         cached.floorEntry(offset)?.let { (start, data) ->
             if (end <= start + data.size) {
@@ -49,7 +70,7 @@ internal class RemoteInput(val size: Long, private val source: RangeSource) : Se
                 position = gapEnd
             }
         }
-        if (transferred + missing > limit) throw IOException("Límite de lectura de vista previa alcanzado")
+        if (transferred + missing > limit) fail(PreviewLimitException())
         if (missing == length.toLong()) return fetch(offset, length)
 
         val result = ByteArray(length)
@@ -74,22 +95,22 @@ internal class RemoteInput(val size: Long, private val source: RangeSource) : Se
     }
 
     private fun checkAvailable() {
-        if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
-        if (System.nanoTime() > deadline) throw IOException("Tiempo de vista previa agotado")
+        if (Thread.currentThread().isInterrupted) fail("Lectura cancelada")
+        if (System.nanoTime() > deadline) fail(PreviewTimeoutException())
     }
 
     /** Called under the monitor, only for a gap already checked against the byte budget. */
     private fun fetch(offset: Long, length: Int): ByteArray {
         checkAvailable()
         val data = source.read(offset, length)
-        if (data.size != length) throw IOException("Lectura SFTP incompleta")
+        if (data.size != length) fail(PreviewIncompleteException())
         cached[offset] = data
         transferred += data.size
         return data
     }
 
     fun span(offset: Long, length: Int): ByteArray {
-        if (length < 0 || length > 16 * 1024 * 1024) throw IOException("Vista previa demasiado grande")
+        if (length < 0 || length > 16 * 1024 * 1024) fail(PreviewRangeException())
         val result = ByteArray(length)
         var done = 0
         while (done < length) {
@@ -116,9 +137,9 @@ internal class RemoteInput(val size: Long, private val source: RangeSource) : Se
             0 -> offset
             1 -> cursor + offset
             2 -> size + offset
-            else -> throw IOException("Origen de lectura desconocido")
+            else -> fail(PreviewRangeException())
         }
-        if (target < 0 || target > size) throw IOException("Posición fuera del documento")
+        if (target < 0 || target > size) fail(PreviewRangeException())
         cursor = target
         return target
     }

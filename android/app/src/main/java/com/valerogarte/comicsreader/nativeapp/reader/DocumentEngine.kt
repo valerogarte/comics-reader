@@ -11,7 +11,9 @@ import java.io.Closeable
 import java.io.File
 import java.io.IOException
 import java.util.Locale
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 data class DocumentOptions(
     val fontSize: Float = 18f,
@@ -29,6 +31,8 @@ data class DocumentMetadata(
     val pageCount: Int = 0,
     val cover: Bitmap? = null,
 )
+
+internal class RemotePreviewFailure(val retryable: Boolean, cause: Exception) : IOException("No se pudo crear la vista previa", cause)
 
 interface DocumentSession : Closeable {
     val pageCount: Int
@@ -68,18 +72,31 @@ class NativeDocumentEngine(context: Context) {
         }.getOrElse { DocumentMetadata(baseTitle(name)) }
     }
 
-    fun inspectRemote(name: String, size: Long, source: RangeSource): DocumentMetadata {
+    fun inspectRemote(name: String, size: Long, source: RangeSource): DocumentMetadata =
+        runCatching { inspectRemoteStrict(name, size, source) }.getOrElse { DocumentMetadata(baseTitle(name)) }
+
+    /** Preserve failures so callers can retry remote reads after a transient interruption. */
+    internal fun inspectRemoteStrict(name: String, size: Long, source: RangeSource): DocumentMetadata {
         val fallback = DocumentMetadata(baseTitle(name))
-        if (size <= 1 || Thread.currentThread().isInterrupted) return fallback
-        val input = RemoteInput(size, source)
-        return runCatching {
-            when (extension(name)) {
+        if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
+        if (size <= 1) return fallback
+        // Some format readers treat metadata and covers as optional and catch their errors.
+        // Retain transport failures even if one of those readers swallowed the exception.
+        val sourceFailure = AtomicReference<Exception?>(null)
+        val input = RemoteInput(size, RangeSource { offset, length ->
+            try { source.read(offset, length) }
+            catch (error: Exception) { sourceFailure.compareAndSet(null, error); throw error }
+        })
+        try {
+            val metadata = when (extension(name)) {
                 "cbz", "zip" -> {
                     try { RemoteBookPreview.comic(name, input) }
                     catch (_: UnsupportedZipPreviewException) {
                         ArchiveDocument(BookArchive(remote = input)).use { it.metadata(name) }
                     }
                 }
+                "cbr", "rar" -> Rar5RemotePreview.inspect(name, input) ?: Rar4RemotePreview.inspect(name, input)
+                    ?: ArchiveDocument(BookArchive(remote = input)).use { it.metadata(name) }
                 in comicExtensions -> ArchiveDocument(BookArchive(remote = input)).use { it.metadata(name) }
                 "ofd" -> OfdDocument(BookArchive(remote = input), name).use { it.metadata(name) }
                 "doc", "ppt" -> LegacyOffice.inspectRemote(name, input)
@@ -103,7 +120,20 @@ class NativeDocumentEngine(context: Context) {
                 "pdf", "xps", "oxps" -> NativePagePreview.inspect(applicationContext, name, input)
                 else -> fallback
             }
-        }.getOrElse { fallback }
+            (sourceFailure.get() ?: input.failure()?.takeIf { metadata.cover == null })?.let { error ->
+                metadata.cover?.takeUnless { it.isRecycled }?.recycle()
+                throw error
+            }
+            return metadata
+        } catch (error: Exception) {
+            val cause = sourceFailure.get() ?: input.failure() ?: error
+            if (cause is CancellationException) throw cause
+            throw RemotePreviewFailure(
+                retryable = (sourceFailure.get() != null && cause !is PreviewLimitException && cause !is PreviewRangeException) ||
+                    cause is PreviewTimeoutException || cause is PreviewIncompleteException || Thread.currentThread().isInterrupted,
+                cause = cause,
+            )
+        }
     }
 
     fun open(file: File, name: String = file.name, options: DocumentOptions = DocumentOptions()): DocumentSession {
