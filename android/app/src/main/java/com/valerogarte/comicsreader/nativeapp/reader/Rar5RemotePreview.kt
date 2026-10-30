@@ -105,8 +105,9 @@ internal object Rar5RemotePreview {
         ).read(entry.name, maxSize)
         val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
             ?.let { runCatching { XmlContent.parse(read(it, 1024 * 1024)) }.getOrNull() }
-        val coverIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
-            ?.attr("Image")?.toIntOrNull()?.takeIf { it in images.indices } ?: 0
+        val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
+            ?.attr("Image")?.toIntOrNull()
+        val coverIndex = comicCoverIndex(name, images.map { it.name }, metadataIndex)
         fun cover(index: Int) = imageBitmap(read(images[index], 64 * 1024 * 1024), 360)
             ?: throw IOException("Imagen de portada no compatible")
         val cover = if (coverIndex == 0) cover(0) else runCatching { cover(coverIndex) }.getOrElse { cover(0) }

@@ -17,8 +17,9 @@ internal object RemoteBookPreview {
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
         val info = zip.entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
             ?.let { entry -> optionalComicPart { XmlContent.parse(zip.read(entry, 1024 * 1024)) } }
-        val coverIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
-            ?.attr("Image")?.toIntOrNull()?.takeIf { it in images.indices } ?: 0
+        val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
+            ?.attr("Image")?.toIntOrNull()
+        val coverIndex = comicCoverIndex(name, images.map { it.name }, metadataIndex)
         fun cover(index: Int) = optionalComicPart { imageBitmap(zip.read(images[index], 16 * 1024 * 1024), 360) }
         return DocumentMetadata(
             title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },

@@ -10,6 +10,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.text.Normalizer
 import kotlin.math.min
 
 internal data class ArchiveItem(val name: String, val size: Long)
@@ -170,6 +171,28 @@ internal val naturalOrder = Comparator<String> { a, b ->
     if (comparison != 0) comparison else left.size.compareTo(right.size)
 }
 
+/** Pick an embedded cover without reading the other archive entries. */
+internal fun comicCoverIndex(archiveName: String, images: List<String>, metadataIndex: Int?): Int {
+    if (metadataIndex != null && metadataIndex in images.indices) return metadataIndex
+    fun normalized(value: String) = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+    val explicitCover = images.indexOfFirst { image ->
+        val stem = normalized(image.substringAfterLast('/').substringBeforeLast('.'))
+        stem.split(Regex("[^a-z0-9]+")).any { it in setOf("cover", "frontcover", "folder", "poster", "portada", "caratula") }
+    }
+    if (explicitCover >= 0) return explicitCover
+    val titleTokens = normalized(archiveName.substringAfterLast('/').substringBeforeLast('.'))
+        .split(Regex("[^a-z0-9]+"))
+        .filter { it.length >= 4 && it !in setOf("el", "los", "las", "the", "and", "for", "del", "una", "uno") }
+        .distinct().sortedByDescending { it.length }
+    return titleTokens.firstNotNullOfOrNull { token ->
+        images.indexOfFirst { image ->
+            val stem = normalized(image.substringAfterLast('/').substringBeforeLast('.'))
+            stem.contains(token)
+        }.takeIf { it >= 0 }
+    } ?: 0
+}
+
 internal class ArchiveDocument(private val archive: BookArchive) : DocumentSession {
     private val entries = archive.entries()
     private val images = entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
@@ -184,8 +207,9 @@ internal class ArchiveDocument(private val archive: BookArchive) : DocumentSessi
     fun metadata(name: String): DocumentMetadata {
         val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
             ?.let { runCatching { XmlContent.parse(archive.read(it.name, 1024 * 1024)) }.getOrNull() }
-        val coverIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
-            ?.attr("Image")?.toIntOrNull()?.takeIf { it in images.indices } ?: 0
+        val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
+            ?.attr("Image")?.toIntOrNull()
+        val coverIndex = comicCoverIndex(name, images, metadataIndex)
         return DocumentMetadata(
             title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },
             author = XmlContent.value(info, "Writer"),
