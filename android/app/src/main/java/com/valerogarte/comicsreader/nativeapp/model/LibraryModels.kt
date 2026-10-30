@@ -57,6 +57,8 @@ data class RemoteEntry(
     val pageCount: Int = 0,
     val downloadedBookId: String? = null,
     val sourceId: String? = null,
+    /** Preview has been attempted for the current file and extractor version, even without a cover. */
+    val previewVersion: Int = 0,
     /** Direct files in a directory, including every format; null means not counted yet. */
     val fileCount: Int? = null,
 )

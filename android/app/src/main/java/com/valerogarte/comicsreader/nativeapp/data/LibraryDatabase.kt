@@ -13,7 +13,7 @@ import com.valerogarte.comicsreader.nativeapp.model.RemoteFolder
 import com.valerogarte.comicsreader.nativeapp.model.ShelfEntry
 
 /** The native library has its own database; it never opens or migrates browser storage. */
-internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 2) {
+internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 3) {
     init { setWriteAheadLoggingEnabled(true) }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -42,14 +42,16 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             modified INTEGER NOT NULL, title TEXT NOT NULL, format TEXT NOT NULL,
             cover_path TEXT, author TEXT NOT NULL, description TEXT NOT NULL,
             publisher TEXT NOT NULL, page_count INTEGER NOT NULL, file_count INTEGER,
+            preview_version INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(source_id,path))""")
         db.execSQL("CREATE INDEX remote_parent ON remote_entries(source_id,parent_path)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion == 1 && newVersion == 2) { "Unsupported native library database version" }
-        // A nullable addition preserves every book, shelf, cached entry and existing thumbnail.
-        db.execSQL("ALTER TABLE remote_entries ADD COLUMN file_count INTEGER")
+        check(oldVersion in 1..2 && newVersion == 3) { "Unsupported native library database version" }
+        // Nullable/defaulted additions preserve every book, shelf, cached entry and thumbnail.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE remote_entries ADD COLUMN file_count INTEGER")
+        db.execSQL("ALTER TABLE remote_entries ADD COLUMN preview_version INTEGER NOT NULL DEFAULT 0")
     }
 
     fun books(shelfName: String? = null): List<BookEntry> = readableDatabase.query(
@@ -142,6 +144,7 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             put("format", BookFormats.format(entry.name)); put("cover_path", entry.coverPath)
             put("author", entry.author); put("description", entry.description)
             put("publisher", entry.publisher); put("page_count", entry.pageCount)
+            put("preview_version", entry.previewVersion)
             put("file_count", entry.fileCount)
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
@@ -178,7 +181,7 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         size = long("size"), modified = long("modified"), title = string("title"), format = string("format"),
         coverPath = optional("cover_path"), author = string("author"), description = string("description"),
         publisher = string("publisher"), pageCount = int("page_count"), downloadedBookId = optional("downloaded_book_id"),
-        sourceId = string("source_id"),
+        sourceId = string("source_id"), previewVersion = int("preview_version"),
         fileCount = optionalInt("file_count"),
     )
 

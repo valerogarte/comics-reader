@@ -242,7 +242,8 @@ class LibraryRepository(context: Context) : Closeable {
                             val old = previous[entry.path]
                             val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
                             val hasCover = old?.coverPath?.let { File(it).isFile } == true
-                            val updated = if (unchanged && hasCover) entry else previewSlots.withPermit {
+                            val previewIsCurrent = old?.previewVersion == REMOTE_PREVIEW_VERSION
+                            val updated = if (unchanged && (hasCover || previewIsCurrent)) entry else previewSlots.withPermit {
                                 inspectRemote(config, entry, folderPath)
                             }
                             results.send(index to updated)
@@ -401,7 +402,15 @@ class LibraryRepository(context: Context) : Closeable {
                 })
             } finally { reader?.close() }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { job.ensureActive(); return entry }
+        catch (_: Exception) {
+            job.ensureActive()
+            val attempted = entry.copy(previewVersion = REMOTE_PREVIEW_VERSION)
+            remoteCacheMutation.withLock {
+                job.ensureActive()
+                database.cacheEntry(config.id, folderPath, attempted)
+            }
+            return attempted
+        }
         try {
             return remoteCacheMutation.withLock {
                 job.ensureActive()
@@ -413,6 +422,7 @@ class LibraryRepository(context: Context) : Closeable {
                     title = metadata.title.ifBlank { entry.title }, author = metadata.author,
                     description = metadata.description, publisher = metadata.publisher,
                     pageCount = metadata.pageCount, coverPath = cover,
+                    previewVersion = REMOTE_PREVIEW_VERSION,
                 )
                 try { database.cacheEntry(config.id, folderPath, updated) }
                 catch (error: Exception) {
@@ -596,6 +606,7 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
+        private const val REMOTE_PREVIEW_VERSION = 1
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")

@@ -64,7 +64,6 @@ private data class ReaderPageImage(val index: Int, val bitmap: Bitmap)
 fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppActions) {
     var controlsVisible by remember(reader.bookId) { mutableStateOf(true) }
     var readerOptions by remember(reader.bookId) { mutableStateOf(false) }
-    var resetZoomRequest by remember(reader.bookId) { mutableIntStateOf(0) }
     var loadingIndicatorVisible by remember(reader.bookId, reader.pageIndex, reader.loading, reader.error) { mutableStateOf(false) }
     LaunchedEffect(reader.bookId, reader.pageIndex, reader.loading, reader.error) {
         if (reader.loading && reader.error == null) {
@@ -94,14 +93,7 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
     }
     BackHandler { if (readerOptions) readerOptions = false else actions.onCloseReader() }
     Box(Modifier.fillMaxSize().background(background)) {
-        if (settings.readingMode == ReaderMode.VERTICAL && reader.bitmap != null) {
-            VerticalReaderPages(
-                reader = reader,
-                actions = actions,
-                onTap = { controlsVisible = !controlsVisible },
-                resetZoomRequest = resetZoomRequest,
-            )
-        } else if (reader.bitmap != null) {
+        if (reader.bitmap != null) {
             val transform = rememberTransformableState { zoomChange, panChange, _ ->
                 scale = (scale * zoomChange).coerceIn(1f, 6f)
                 offset = if (scale <= 1f) Offset.Zero else offset + panChange
@@ -186,7 +178,7 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
                 title = { Text(reader.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { IconButton(onClick = actions::onCloseReader) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_close)) } },
                 actions = {
-                    if (reader.bitmap != null) IconButton(onClick = { scale = 1f; offset = Offset.Zero; resetZoomRequest++ }) { Icon(Icons.Default.FitScreen, stringResource(R.string.native_fit_page)) }
+                    if (reader.bitmap != null) IconButton(onClick = { scale = 1f; offset = Offset.Zero }) { Icon(Icons.Default.FitScreen, stringResource(R.string.native_fit_page)) }
                     IconButton(onClick = { readerOptions = true }) { Icon(Icons.Default.Settings, stringResource(R.string.native_reader_settings)) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = .96f)),
@@ -214,22 +206,13 @@ fun ReaderScreen(reader: UiReaderState, settings: UiSettings, actions: AppAction
             title = { Text(stringResource(R.string.native_reader_settings)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    ChoiceRow(
-                        stringResource(R.string.native_reading_mode), draft.readingMode.name,
-                        listOf(
-                            ReaderMode.HORIZONTAL.name to stringResource(R.string.native_reading_horizontal),
-                            ReaderMode.VERTICAL.name to stringResource(R.string.native_reading_vertical),
-                        ),
-                    ) { draft = draft.copy(readingMode = ReaderMode.valueOf(it)) }
                     if (reader.text != null || reader.reflowable) {
                         Text(stringResource(R.string.native_font_size, draft.fontSize.toInt()))
                         Slider(draft.fontSize.coerceIn(12f, 32f), onValueChange = { draft = draft.copy(fontSize = it) }, valueRange = 12f..32f)
                         ChoiceRow(stringResource(R.string.native_font), draft.font, listOf("sans" to stringResource(R.string.native_sans), "serif" to stringResource(R.string.native_serif), "mono" to stringResource(R.string.native_mono))) { draft = draft.copy(font = it) }
                     }
                     SettingSwitch(stringResource(R.string.native_keep_screen_on), draft.keepScreenOn) { draft = draft.copy(keepScreenOn = it) }
-                    if (draft.readingMode == ReaderMode.HORIZONTAL) {
-                        SettingSwitch(stringResource(R.string.native_right_to_left), draft.rightToLeft) { draft = draft.copy(rightToLeft = it) }
-                    }
+                    SettingSwitch(stringResource(R.string.native_right_to_left), draft.rightToLeft) { draft = draft.copy(rightToLeft = it) }
                 }
             },
             confirmButton = { TextButton(onClick = { actions.onSaveSettings(draft); readerOptions = false }) { Text(stringResource(R.string.native_save)) } },
