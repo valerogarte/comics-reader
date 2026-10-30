@@ -1,10 +1,13 @@
 package com.valerogarte.comicsreader.nativeapp.ui
 
 import android.graphics.Bitmap
+import com.valerogarte.comicsreader.nativeapp.reader.ReadingFonts
 
 enum class LibraryDestination { BOOKS, SFTP, SHELF }
 enum class ReadFilter { ALL, UNREAD, READING, FINISHED }
 enum class LibraryLayout { GRID, LIST }
+enum class ReaderMode { HORIZONTAL, VERTICAL }
+enum class ReaderTransition { NONE, FADE, SLIDE, PAGE_TURN, REVEAL, ZOOM }
 
 data class UiBook(
     val id: String,
@@ -55,13 +58,15 @@ data class UiRemoteEntry(
 data class UiSettings(
     val theme: String = "system",
     val background: String = "cream",
-    val font: String = "sans",
+    val font: String = ReadingFonts.DEFAULT_ID,
     val fontSize: Float = 18f,
     val fontPath: String? = null,
     val backgroundImagePath: String? = null,
     val keepScreenOn: Boolean = true,
     val rightToLeft: Boolean = false,
     val sftpServers: List<UiSftpServer> = emptyList(),
+    val readingMode: ReaderMode = ReaderMode.HORIZONTAL,
+    val readerTransition: ReaderTransition = ReaderTransition.SLIDE,
 )
 
 data class UiReaderState(
@@ -74,6 +79,9 @@ data class UiReaderState(
     val loading: Boolean = false,
     val error: String? = null,
     val reflowable: Boolean = false,
+    val sessionId: Int = 0,
+    val navigationRequest: Long = 0,
+    val bitmapPageIndex: Int? = null,
 )
 
 data class AppUiState(
@@ -125,7 +133,11 @@ interface AppActions {
     fun onShowSettings() {}
     fun onCloseSettings() {}
     fun onSaveSettings(settings: UiSettings) {}
+    fun onUpdateAppearanceSettings(update: (UiSettings) -> UiSettings) {}
+    fun onUpdateSftpServers(update: (List<UiSftpServer>) -> List<UiSftpServer>) {}
     fun onDismissMessage() {}
     fun onCloseReader() {}
     fun onReaderPage(pageIndex: Int) {}
+    suspend fun loadReaderPage(bookId: String, sessionId: Int, pageIndex: Int): Bitmap? = null
+    fun onReaderPosition(bookId: String, sessionId: Int, navigationRequest: Long, pageIndex: Int) {}
 }

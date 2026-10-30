@@ -14,6 +14,7 @@ import com.valerogarte.comicsreader.nativeapp.model.*
 import com.valerogarte.comicsreader.nativeapp.reader.DocumentOptions
 import com.valerogarte.comicsreader.nativeapp.reader.DocumentSession
 import com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine
+import com.valerogarte.comicsreader.nativeapp.reader.ReadingFonts
 import com.valerogarte.comicsreader.nativeapp.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentSkipListMap
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 
@@ -52,16 +54,33 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private var importJob: Job? = null
     private var initializeJob: Job? = null
     private val settingsSave = Mutex()
+    private val appearanceSave = Mutex()
+    private var appearanceSaveJob: Job? = null
+    @Volatile private var appearanceVersion = 0L
+    @Volatile private var savedAppearanceVersion = 0L
+    private var fontImportVersion = 0L
+    private var backgroundImportVersion = 0L
     private val operationIds = AtomicLong()
     private val operationMessages = ConcurrentSkipListMap<Long, String>()
     private val emptyShelves = ArrayDeque<String>()
     private val readerLock = Mutex()
+    private val readerProgressLock = Mutex()
+    private val readerProgressVersions = ConcurrentHashMap<String, Long>()
+    private val readerProgressIds = AtomicLong()
+    private var readerProgressJob: Job? = null
+    private val pageCache = LinkedHashMap<Int, Bitmap>(8, 0.75f, true)
+    private var pageCacheBytes = 0L
+    private val pageCacheLimit = 24L * 1024 * 1024
+    private var readerNavigationRequest = 0L
+    private var readerPositionSession = -1
+    private var readerCommittedPage = 0
     private val libraryReload = Mutex()
     private var session: DocumentSession? = null
     @Volatile private var sessionOptions: DocumentOptions? = null
     private var sessionGeneration = -1
     @Volatile private var readerGeneration = 0
     private var renderJob: Job? = null
+    private var readerAppearanceJob: Job? = null
 
     init {
         initializeJob = launchOperation {
@@ -142,14 +161,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onDeleteBooks(ids: List<String>) {
         launchOperation("Borrando definitivamente") {
+            ids.forEach { readerProgressVersions[it] = readerProgressIds.incrementAndGet() }
             val affectedShelves = books.filter { it.id in ids }.mapNotNull { it.shelfName }.toSet()
             if (mutableState.value.reader?.bookId in ids) {
                 val generation = ++readerGeneration
+                readerAppearanceJob?.cancel()
+                readerProgressJob?.cancel()
                 renderJob?.cancelAndJoin()
                 mutableState.update { it.copy(reader = null) }
                 closeReaderSession(generation)
             }
-            try { repository.deleteBooks(ids) }
+            try { readerProgressLock.withLock { repository.deleteBooks(ids) } }
             finally {
                 withContext(NonCancellable) { reloadLibrary() }
                 val newlyEmpty = affectedShelves.filter { shelf -> books.none { it.shelfName == shelf } }
@@ -313,92 +335,167 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             mutableState.update { it.copy(settingsVisible = true) }
         }
     }
-    override fun onCloseSettings() { mutableState.update { it.copy(settingsVisible = false) } }
+    override fun onCloseSettings() {
+        mutableState.update { it.copy(settingsVisible = false) }
+        scheduleAppearanceSave(immediate = true)
+    }
 
-    override fun onSaveSettings(settings: UiSettings) {
-        launchOperation("Guardando configuración") {
+    override fun onUpdateAppearanceSettings(update: (UiSettings) -> UiSettings) {
+        if (applyAppearanceUpdate(update)) scheduleAppearanceSave()
+    }
+
+    override fun onUpdateSftpServers(update: (List<UiSftpServer>) -> List<UiSftpServer>) {
+        launchOperation("Guardando servidores") {
             settingsSave.withLock {
-                val oldSettings = mutableState.value.settings
-                // Saving an explicitly edited list can replace unreadable encrypted preferences.
-                val oldConfigs = oldSettings.sftpServers.map { it.toConfig() }.associateBy { it.profileId }
-                val configs = settings.sftpServers.map { it.toConfig() }
-                val nextConfigs = configs.associateBy { it.profileId }
-                val changed = oldConfigs.keys.filter { id ->
-                    val old = oldConfigs.getValue(id)
-                    val next = nextConfigs[id]
-                    next == null || old.copy(name = next.name) != next
-                }
-                val cancelledJobs = changed.flatMap { id ->
-                    browsers[id]?.let { browser ->
-                        browser.generation++
-                        listOfNotNull(browser.scanJob, browser.transferJob).onEach { it.cancel() }
-                    }.orEmpty()
-                }
-                cancelledJobs.joinAll()
-                // Clear cancelled work even when validation or encrypted persistence below fails.
-                changed.forEach { id ->
-                    browsers[id]?.apply {
-                        scanMessage = null
-                        transferMessage = null
-                        transferProgress = null
-                        transferringPaths = emptySet()
-                    }
-                    publishRemote(id)
-                }
-                repository.saveSftpConfigs(configs)
-                val saved = repository.loadSftpConfigs()
-                saved.forEach { config ->
-                    val old = oldConfigs[config.profileId]
-                    if (old != null && old.id != config.id) browsers.remove(config.profileId)
-                    else browsers[config.profileId]?.apply { if (config.profileId in changed) { scanMessage = null; transferMessage = null } }
-                }
-                browsers.keys.retainAll(saved.map { it.profileId }.toSet())
-                val selected = mutableState.value.selectedSftpServerId?.takeIf { id -> saved.any { it.profileId == id } }
-                    ?: saved.firstOrNull()?.profileId
-                writeAppearance(settings)
-                mutableState.update { it.copy(settings = settings.withSftp(saved), settingsVisible = false, selectedSftpServerId = selected) }
-                if (mutableState.value.destination == LibraryDestination.SFTP) {
-                    if (selected == null) {
-                        mutableState.update { it.copy(remotePath = "/", remoteEntries = emptyList(), loading = false) }
-                        onNavigate(LibraryDestination.BOOKS)
-                    } else onOpenSftpServer(selected)
-                }
-                updateBusyMessage()
-                val reader = mutableState.value.reader
-                if (reader?.reflowable == true && sessionOptions != documentOptions(settings)) {
-                    val fraction = reader.pageIndex.toFloat() / (reader.pageCount - 1).coerceAtLeast(1)
-                    openBook(reader.bookId, fraction)
-                }
+                saveSftpServers(update(mutableState.value.settings.sftpServers))
             }
         }
     }
 
+    override fun onSaveSettings(settings: UiSettings) {
+        launchOperation("Guardando configuración") {
+            settingsSave.withLock {
+                // Preserve the full-snapshot action for existing callers; unchanged servers
+                // require no encrypted reads, writes, channel cancellation or reconnection.
+                if (settings.sftpServers != mutableState.value.settings.sftpServers) saveSftpServers(settings.sftpServers)
+                applyAppearanceUpdate { settings }
+                appearanceSaveJob?.cancel()
+                persistAppearanceLatest()
+                refreshReaderAppearance()
+                mutableState.update { it.copy(settingsVisible = false) }
+            }
+        }
+    }
+
+    private fun applyAppearanceUpdate(update: (UiSettings) -> UiSettings): Boolean {
+        val current = mutableState.value.settings
+        val updated = update(current).copy(sftpServers = current.sftpServers)
+        if (updated == current) return false
+        if (updated.font != current.font || updated.fontPath != current.fontPath) fontImportVersion++
+        if (updated.backgroundImagePath != current.backgroundImagePath) backgroundImportVersion++
+        mutableState.update { it.copy(settings = updated.copy(sftpServers = it.settings.sftpServers)) }
+        appearanceVersion++
+        return true
+    }
+
+    private fun scheduleAppearanceSave(immediate: Boolean = false) {
+        appearanceSaveJob?.cancel()
+        if (appearanceVersion == savedAppearanceVersion) {
+            if (immediate) refreshReaderAppearance()
+            return
+        }
+        appearanceSaveJob = viewModelScope.launch {
+            try {
+                if (!immediate) delay(250)
+                persistAppearanceLatest()
+                refreshReaderAppearance()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    private suspend fun persistAppearanceLatest() = withContext(NonCancellable) {
+        appearanceSave.withLock {
+            val version = appearanceVersion
+            if (version != savedAppearanceVersion) {
+                writeAppearance(mutableState.value.settings)
+                savedAppearanceVersion = version
+            }
+        }
+    }
+
+    private fun refreshReaderAppearance() {
+        val reader = mutableState.value.reader ?: return
+        if (!reader.reflowable) return
+        val settings = mutableState.value.settings
+        val version = appearanceVersion
+        val generation = readerGeneration
+        readerAppearanceJob?.cancel()
+        readerAppearanceJob = viewModelScope.launch {
+            try {
+                val options = withContext(Dispatchers.IO) { documentOptions(settings) }
+                if (generation != readerGeneration || version != appearanceVersion) return@launch
+                val current = mutableState.value.reader ?: return@launch
+                if (current.bookId == reader.bookId && current.sessionId == reader.sessionId && sessionOptions != options) {
+                    val fraction = current.pageIndex.toFloat() / (current.pageCount - 1).coerceAtLeast(1)
+                    openBook(current.bookId, fraction)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    /** Called under settingsSave; appearance changes may continue while server persistence waits. */
+    private suspend fun saveSftpServers(servers: List<UiSftpServer>) {
+        val oldServers = mutableState.value.settings.sftpServers
+        if (servers == oldServers) return
+        val oldConfigs = oldServers.map { it.toConfig() }.associateBy { it.profileId }
+        val configs = servers.map { it.toConfig() }
+        val nextConfigs = configs.associateBy { it.profileId }
+        val changed = oldConfigs.keys.filter { id ->
+            val old = oldConfigs.getValue(id)
+            val next = nextConfigs[id]
+            next == null || old.copy(name = next.name) != next
+        }
+        val cancelledJobs = changed.flatMap { id ->
+            browsers[id]?.let { browser ->
+                browser.generation++
+                listOfNotNull(browser.scanJob, browser.transferJob).onEach { it.cancel() }
+            }.orEmpty()
+        }
+        cancelledJobs.joinAll()
+        changed.forEach { id ->
+            browsers[id]?.apply {
+                scanMessage = null; transferMessage = null; transferProgress = null; transferringPaths = emptySet()
+            }
+            publishRemote(id)
+        }
+        repository.saveSftpConfigs(configs)
+        val saved = repository.loadSftpConfigs()
+        saved.forEach { config ->
+            val old = oldConfigs[config.profileId]
+            if (old != null && old.id != config.id) browsers.remove(config.profileId)
+        }
+        browsers.keys.retainAll(saved.map { it.profileId }.toSet())
+        val selected = mutableState.value.selectedSftpServerId?.takeIf { id -> saved.any { it.profileId == id } }
+            ?: saved.firstOrNull()?.profileId
+        mutableState.update { it.copy(settings = it.settings.withSftp(saved), selectedSftpServerId = selected) }
+        reloadLibrary()
+        if (mutableState.value.destination == LibraryDestination.SFTP) {
+            if (selected == null) {
+                mutableState.update { it.copy(remotePath = "/", remoteEntries = emptyList(), loading = false) }
+                onNavigate(LibraryDestination.BOOKS)
+            } else onOpenSftpServer(selected)
+        }
+        updateBusyMessage()
+    }
+
     fun importFont(uri: Uri) {
+        val version = ++fontImportVersion
         launchOperation {
             val file = copyAsset(uri, "reader-font", 16L * 1024 * 1024) { Typeface.createFromFile(it) }
-            val settings = mutableState.value.settings.copy(font = "custom", fontPath = file.path)
-            writeAppearance(settings)
-            mutableState.update { it.copy(settings = settings) }
+            if (version != fontImportVersion) { file.delete(); return@launchOperation }
+            onUpdateAppearanceSettings { it.copy(font = "custom", fontPath = file.path) }
         }
     }
 
     fun importBackground(uri: Uri) {
+        val version = ++backgroundImportVersion
         launchOperation {
             val file = copyAsset(uri, "library-background", 32L * 1024 * 1024) {
                 val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(it.path, options)
                 require(options.outWidth > 0 && options.outHeight > 0 && options.outWidth.toLong() * options.outHeight <= 200_000_000L) { "Selecciona una imagen válida" }
             }
-            val settings = mutableState.value.settings.copy(backgroundImagePath = file.path)
-            writeAppearance(settings)
-            mutableState.update { it.copy(settings = settings) }
+            if (version != backgroundImportVersion) { file.delete(); return@launchOperation }
+            onUpdateAppearanceSettings { it.copy(backgroundImagePath = file.path) }
         }
     }
 
     private suspend fun copyAsset(uri: Uri, name: String, maximum: Long, validate: (File) -> Unit): File = withContext(Dispatchers.IO) {
         val directory = File(getApplication<Application>().filesDir, "appearance").apply { mkdirs() }
         val part = File.createTempFile(name, ".part", directory)
-        val destination = File(directory, "$name-${System.currentTimeMillis()}")
+        val destination = File(directory, "$name-${java.util.UUID.randomUUID()}")
         try {
             getApplication<Application>().contentResolver.openInputStream(uri).use { input ->
                 requireNotNull(input) { "No se puede abrir el archivo" }
@@ -428,26 +525,28 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun onHostConfigurationChanged() {
         val reader = mutableState.value.reader ?: return
         if (!reader.reflowable || reader.loading || reader.error != null) return
-        if (sessionOptions != documentOptions(mutableState.value.settings)) {
-            val fraction = reader.pageIndex.toFloat() / (reader.pageCount - 1).coerceAtLeast(1)
-            openBook(reader.bookId, fraction)
-        }
+        refreshReaderAppearance()
     }
 
     private fun openBook(id: String, resumeFraction: Float? = null) {
+        flushReaderProgress()
         val generation = ++readerGeneration
+        readerAppearanceJob?.cancel()
         renderJob?.cancel()
-        mutableState.update { it.copy(reader = UiReaderState(id, books.find { book -> book.id == id }?.title ?: "Libro", loading = true)) }
+        mutableState.update { it.copy(reader = UiReaderState(id, books.find { book -> book.id == id }?.title ?: "Libro",
+            loading = true, sessionId = generation, navigationRequest = ++readerNavigationRequest)) }
         renderJob = viewModelScope.launch {
             try {
-                val book = repository.loadBook(id) ?: throw IOException("El libro ya no está en la biblioteca")
+                val book = readerProgressLock.withLock { repository.loadBook(id) }
+                    ?: throw IOException("El libro ya no está en la biblioteca")
                 val settings = mutableState.value.settings
-                val options = documentOptions(settings)
                 withContext(Dispatchers.IO) {
+                    val options = documentOptions(settings)
                     readerLock.withLock {
                         ensureActive()
                         if (generation != readerGeneration) throw CancellationException()
                         session?.close(); session = null; sessionOptions = null
+                        clearPageCache()
                         val opened = engine.open(File(book.localPath), book.fileName, options)
                         try {
                             ensureActive()
@@ -468,61 +567,146 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onReaderPage(pageIndex: Int) {
         val reader = mutableState.value.reader ?: return
+        if (reader.loading || reader.error != null || reader.sessionId != readerGeneration) return
         val page = pageIndex.coerceIn(0, (reader.pageCount - 1).coerceAtLeast(0))
-        val generation = readerGeneration
-        renderJob?.cancel()
-        renderJob = viewModelScope.launch {
-            try { renderPage(page, generation, reader.bookId, reader.title) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) {
-                if (generation == readerGeneration) mutableState.update { it.copy(reader = it.reader?.copy(loading = false, error = error.message)) }
+        // Both reading layouts load their own pages. This is a navigation request,
+        // not a confirmation that the requested page has reached the viewport.
+        mutableState.update { it.copy(reader = reader.copy(pageIndex = page, navigationRequest = ++readerNavigationRequest)) }
+    }
+
+    override suspend fun loadReaderPage(bookId: String, sessionId: Int, pageIndex: Int): Bitmap? {
+        val reader = mutableState.value.reader ?: return null
+        if (reader.bookId != bookId || reader.sessionId != sessionId || readerGeneration != sessionId) return null
+        val bitmap = withContext(Dispatchers.IO) {
+            readerLock.withLock {
+                ensureActive()
+                val current = mutableState.value.reader ?: return@withLock null
+                if (sessionGeneration != sessionId || readerGeneration != sessionId || current.bookId != bookId) return@withLock null
+                val document = session ?: return@withLock null
+                require(pageIndex in 0 until document.pageCount) { "Página fuera del documento" }
+                // A very large page may be deliberately excluded from the bounded cache.
+                current.bitmap?.takeIf { current.bitmapPageIndex == pageIndex && !it.isRecycled }
+                    ?: cachedReaderPage(document, pageIndex, sessionId)
             }
         }
+        currentCoroutineContext().ensureActive()
+        return bitmap.takeIf { readerGeneration == sessionId && mutableState.value.reader?.bookId == bookId }
+    }
+
+    override fun onReaderPosition(bookId: String, sessionId: Int, navigationRequest: Long, pageIndex: Int) {
+        val reader = mutableState.value.reader ?: return
+        if (reader.loading || reader.error != null ||
+            reader.bookId != bookId || reader.sessionId != sessionId || readerGeneration != sessionId ||
+            reader.navigationRequest != navigationRequest) return
+        val page = pageIndex.coerceIn(0, (reader.pageCount - 1).coerceAtLeast(0))
+        if (page != reader.pageIndex) mutableState.update { it.copy(reader = reader.copy(pageIndex = page)) }
+        readerCommittedPage = page
+        scheduleReaderProgress()
     }
 
     private suspend fun renderPage(pageIndex: Int, generation: Int, id: String, title: String, resumeFraction: Float? = null) {
         if (generation != readerGeneration) return
         mutableState.update { it.copy(reader = it.reader?.copy(loading = true, error = null)) }
-        var producedBitmap: Bitmap? = null
-        var published = false
-        try {
-            val rendered = withContext(Dispatchers.IO) {
-                readerLock.withLock {
-                    ensureActive()
-                    if (sessionGeneration != generation || generation != readerGeneration) throw CancellationException()
-                    val document = session ?: throw IOException("El lector está cerrado")
-                    val count = document.pageCount.coerceAtLeast(1)
-                    val page = (resumeFraction?.let { (it.coerceIn(0f, 1f) * (count - 1)).roundToInt() } ?: pageIndex).coerceIn(0, count - 1)
-                    val bitmap = document.renderPage(page, 1080)
-                    producedBitmap = bitmap
-                    RenderedPage(bitmap, page, count, document.isReflowable)
-                }
+        val rendered = withContext(Dispatchers.IO) {
+            readerLock.withLock {
+                ensureActive()
+                if (sessionGeneration != generation || generation != readerGeneration) throw CancellationException()
+                val document = session ?: throw IOException("El lector está cerrado")
+                val count = document.pageCount.coerceAtLeast(1)
+                val page = (resumeFraction?.let { (it.coerceIn(0f, 1f) * (count - 1)).roundToInt() } ?: pageIndex).coerceIn(0, count - 1)
+                val bitmap = cachedReaderPage(document, page, generation)
+                RenderedPage(bitmap, page, count, document.isReflowable)
             }
-            if (generation != readerGeneration) return
-            mutableState.update { it.copy(reader = UiReaderState(id, title, rendered.page, rendered.count,
-                bitmap = rendered.bitmap, reflowable = rendered.reflowable)) }
-            published = true
-            withContext(NonCancellable) { repository.saveProgress(id, rendered.page, rendered.count) }
-            // A system change can also arrive while the previous page was still rendering.
-            onHostConfigurationChanged()
-        } finally {
-            if (!published) producedBitmap?.recycle()
+        }
+        if (generation != readerGeneration) return
+        mutableState.update { it.copy(reader = UiReaderState(id, title, rendered.page, rendered.count,
+            bitmap = rendered.bitmap, reflowable = rendered.reflowable, sessionId = generation,
+            navigationRequest = ++readerNavigationRequest, bitmapPageIndex = rendered.page)) }
+        readerPositionSession = generation
+        readerCommittedPage = rendered.page
+        readerProgressJob?.cancel()
+        captureReaderProgress()?.let { persistReaderProgress(it) }
+        // A system change can also arrive while the previous page was still rendering.
+        onHostConfigurationChanged()
+    }
+
+    /** All cache accesses happen under readerLock. Published pages are borrowed, never recycled. */
+    private suspend fun cachedReaderPage(document: DocumentSession, page: Int, generation: Int): Bitmap {
+        pageCache[page]?.let { if (!it.isRecycled) return it }
+        val bitmap = document.renderPage(page, 1080)
+        try {
+            currentCoroutineContext().ensureActive()
+            if (generation != readerGeneration || generation != sessionGeneration) throw CancellationException()
+            val bytes = bitmap.allocationByteCount.toLong()
+            if (bytes <= pageCacheLimit) {
+                val iterator = pageCache.entries.iterator()
+                while (pageCacheBytes + bytes > pageCacheLimit && iterator.hasNext()) {
+                    pageCacheBytes -= iterator.next().value.allocationByteCount.toLong()
+                    iterator.remove()
+                }
+                pageCache.put(page, bitmap)?.let { pageCacheBytes -= it.allocationByteCount.toLong() }
+                pageCacheBytes += bytes
+            }
+            return bitmap
+        } catch (error: Throwable) {
+            bitmap.recycle()
+            throw error
+        }
+    }
+
+    private fun clearPageCache() { pageCache.clear(); pageCacheBytes = 0 }
+
+    private data class ReaderProgress(val bookId: String, val page: Int, val total: Int, val version: Long)
+
+    private fun captureReaderProgress(): ReaderProgress? {
+        val reader = mutableState.value.reader ?: return null
+        if (reader.sessionId != readerPositionSession) return null
+        val version = readerProgressIds.incrementAndGet()
+        readerProgressVersions[reader.bookId] = version
+        return ReaderProgress(reader.bookId, readerCommittedPage, reader.pageCount, version)
+    }
+
+    private suspend fun persistReaderProgress(progress: ReaderProgress) = withContext(NonCancellable) {
+        readerProgressLock.withLock {
+            if (readerProgressVersions[progress.bookId] == progress.version) {
+                repository.saveProgress(progress.bookId, progress.page, progress.total)
+            }
+        }
+    }
+
+    private fun scheduleReaderProgress() {
+        readerProgressJob?.cancel()
+        val progress = captureReaderProgress() ?: return
+        readerProgressJob = viewModelScope.launch {
+            try { delay(300); persistReaderProgress(progress) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    private fun flushReaderProgress() {
+        readerProgressJob?.cancel()
+        val progress = captureReaderProgress() ?: return
+        viewModelScope.launch {
+            try { persistReaderProgress(progress) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
         }
     }
 
     private data class RenderedPage(val bitmap: Bitmap, val page: Int, val count: Int, val reflowable: Boolean)
 
     override fun onCloseReader() {
-        val reader = mutableState.value.reader
+        readerProgressJob?.cancel()
+        val progress = captureReaderProgress()
         val generation = ++readerGeneration
+        readerAppearanceJob?.cancel()
         renderJob?.cancel()
         mutableState.update { it.copy(reader = null) }
         viewModelScope.launch {
             try {
-                closeReaderSession(generation)
-                if (generation == readerGeneration && reader?.bitmap != null && reader.error == null) {
-                    repository.saveProgress(reader.bookId, reader.pageIndex, reader.pageCount)
-                }
+                try { progress?.let { persistReaderProgress(it) } }
+                finally { closeReaderSession(generation) }
                 reloadLibrary()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { report(error) }
@@ -531,7 +715,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun closeReaderSession(generation: Int? = null) = withContext(Dispatchers.IO) {
         readerLock.withLock {
-            if (generation == null || sessionGeneration <= generation) { session?.close(); session = null; sessionOptions = null }
+            if (generation == null || sessionGeneration <= generation) {
+                session?.close(); session = null; sessionOptions = null
+                clearPageCache()
+            }
         }
     }
 
@@ -546,11 +733,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
         books = loadedBooks
         downloadedBooks = downloads
-        mutableState.update { it.copy(
-            books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName), progress(book)) },
-            shelves = shelves, remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
-            readingStatistics = readingStatistics(loadedBooks),
-        ) }
+        mutableState.update {
+            val selectedShelf = it.selectedShelfId?.takeIf { id -> shelves.any { shelf -> shelf.id == id } }
+            it.copy(
+                selectedShelfId = selectedShelf,
+                destination = if (it.destination == LibraryDestination.SHELF && selectedShelf == null) LibraryDestination.BOOKS else it.destination,
+                books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName), progress(book)) },
+                shelves = shelves, remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
+                readingStatistics = readingStatistics(loadedBooks),
+            )
+        }
     }
 
     private fun readingStatistics(books: List<BookEntry>): UiReadingStatistics {
@@ -646,16 +838,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private fun readAppearance() = UiSettings(
         theme = preferences.getString("theme", "system") ?: "system",
         background = preferences.getString("background", "cream") ?: "cream",
-        font = preferences.getString("font", "sans") ?: "sans", fontSize = preferences.getFloat("fontSize", 18f),
+        font = preferences.getString("font", ReadingFonts.DEFAULT_ID) ?: ReadingFonts.DEFAULT_ID, fontSize = preferences.getFloat("fontSize", 18f),
         fontPath = preferences.getString("fontPath", null), backgroundImagePath = preferences.getString("backgroundImagePath", null),
         keepScreenOn = preferences.getBoolean("keepScreenOn", true), rightToLeft = preferences.getBoolean("rightToLeft", false),
+        readingMode = runCatching { ReaderMode.valueOf(preferences.getString("readingMode", ReaderMode.HORIZONTAL.name)!!) }.getOrDefault(ReaderMode.HORIZONTAL),
+        readerTransition = runCatching { ReaderTransition.valueOf(preferences.getString("readerTransition", ReaderTransition.SLIDE.name)!!) }.getOrDefault(ReaderTransition.SLIDE),
     )
 
     private suspend fun writeAppearance(settings: UiSettings) = withContext(Dispatchers.IO) {
         check(preferences.edit().putString("theme", settings.theme).putString("background", settings.background)
             .putString("font", settings.font).putFloat("fontSize", settings.fontSize).putString("fontPath", settings.fontPath)
             .putString("backgroundImagePath", settings.backgroundImagePath).putBoolean("keepScreenOn", settings.keepScreenOn)
-            .putBoolean("rightToLeft", settings.rightToLeft).commit()) { "No se pudo guardar la apariencia" }
+            .putBoolean("rightToLeft", settings.rightToLeft).putString("readingMode", settings.readingMode.name)
+            .putString("readerTransition", settings.readerTransition.name).commit()) { "No se pudo guardar la apariencia" }
     }
 
     private fun documentOptions(settings: UiSettings): DocumentOptions {
@@ -667,18 +862,34 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             settings.background == "sepia" -> Color.rgb(244, 232, 206)
             else -> Color.rgb(252, 250, 245)
         }
-        return DocumentOptions(settings.fontSize, if (settings.font == "mono") "monospace" else settings.font,
-            settings.fontPath.takeIf { settings.font == "custom" }, background,
+        val fontId = when {
+            settings.font == "custom" && settings.fontPath?.let { File(it).isFile } == true -> "custom"
+            ReadingFonts.find(settings.font) != null || settings.font in setOf("sans", "sans-serif", "serif", "mono", "monospace") -> settings.font
+            else -> ReadingFonts.DEFAULT_ID
+        }
+        val fontPath = if (fontId == "custom") settings.fontPath
+            else ReadingFonts.resolve(getApplication<Application>(), fontId)?.absolutePath
+        return DocumentOptions(settings.fontSize, if (fontId == "mono") "monospace" else fontId,
+            fontPath, background,
             if (dark) Color.rgb(237, 232, 223) else Color.rgb(41, 36, 30))
     }
 
     override fun onCleared() {
+        readerAppearanceJob?.cancel()
+        appearanceSaveJob?.cancel()
+        readerProgressJob?.cancel()
+        val progress = captureReaderProgress()
         readerGeneration++
         val pending = viewModelScope.coroutineContext[Job]?.children?.toList().orEmpty()
         CoroutineScope(Dispatchers.IO).launch {
-            pending.joinAll()
-            closeReaderSession()
-            repository.close()
+            try {
+                pending.joinAll()
+                // Independent stores each get a final attempt after the UI has gone away.
+                try { persistAppearanceLatest() } catch (_: Exception) { }
+                try { progress?.let { persistReaderProgress(it) } } catch (_: Exception) { }
+            } finally {
+                try { closeReaderSession() } finally { repository.close() }
+            }
         }
         super.onCleared()
     }
