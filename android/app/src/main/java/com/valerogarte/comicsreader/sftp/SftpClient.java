@@ -268,10 +268,10 @@ public final class SftpClient {
         }
     }
 
-    /** Exact SFTP v3 reads, with at most four requests in flight and no bytes outside the range. */
+    /** Exact SFTP v3 reads, pipelined without fetching bytes outside the requested range. */
     public static final class RangeReader implements Closeable {
         private static final int PIPELINE_SIZE = 4;
-        private static final int READ_SIZE = 32768;
+        private static final int READ_SIZE = 240 * 1024;
         public final long size;
         public final long modifiedMillis;
         private final int timeoutMillis;
@@ -288,6 +288,8 @@ public final class SftpClient {
             this.modifiedMillis = modifiedMillis;
             this.timeoutMillis = timeoutMillis;
             channel = (ChannelSubsystem) session.openChannel("subsystem");
+            // JSch defaults to 16 KiB; fit one 240 KiB SFTP response in an SSH packet.
+            channel.setLocalPacketSize(252 * 1024);
             channel.setSubsystem("sftp");
             channel.setWantReply(true);
             ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);

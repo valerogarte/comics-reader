@@ -83,10 +83,11 @@ class NativeDocumentEngine(context: Context) {
         // Some format readers treat metadata and covers as optional and catch their errors.
         // Retain transport failures even if one of those readers swallowed the exception.
         val sourceFailure = AtomicReference<Exception?>(null)
+        val previewTimeoutMillis = if (extension(name) in comicExtensions) 90_000L else 30_000L
         val input = RemoteInput(size, RangeSource { offset, length ->
             try { source.read(offset, length) }
             catch (error: Exception) { sourceFailure.compareAndSet(null, error); throw error }
-        })
+        }, previewTimeoutMillis)
         try {
             val metadata = when (extension(name)) {
                 "cbz", "zip" -> {

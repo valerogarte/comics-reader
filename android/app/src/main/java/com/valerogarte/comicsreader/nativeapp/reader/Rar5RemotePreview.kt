@@ -100,16 +100,12 @@ internal object Rar5RemotePreview {
         val images = entries.filter { isComicImage(it.name) }
             .sortedWith { a, b -> naturalOrder.compare(a.name, b.name) }
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
-        fun read(entry: Entry, maxSize: Int): ByteArray = BookArchive(
-            remote = EntryInput(input, entry.offset, entry.length),
-        ).read(entry.name, maxSize)
         val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
-            ?.let { runCatching { XmlContent.parse(read(it, 1024 * 1024)) }.getOrNull() }
+            ?.let { runCatching { XmlContent.parse(readEntry(input, it, 1024 * 1024)) }.getOrNull() }
         val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
             ?.attr("Image")?.toIntOrNull()
         val coverIndex = comicCoverIndex(name, images.map { it.name }, metadataIndex)
-        fun cover(index: Int) = imageBitmap(read(images[index], 64 * 1024 * 1024), 360)
-            ?: throw IOException("Imagen de portada no compatible")
+        fun cover(index: Int) = readCover(input, images[index])
         val cover = if (coverIndex == 0) cover(0) else runCatching { cover(coverIndex) }.getOrElse { cover(0) }
         return DocumentMetadata(
             title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },
@@ -117,6 +113,13 @@ internal object Rar5RemotePreview {
             publisher = XmlContent.value(info, "Publisher"), pageCount = images.size, cover = cover,
         )
     }
+
+    private fun readEntry(input: RemoteInput, entry: Entry, maxSize: Int): ByteArray = BookArchive(
+        remote = EntryInput(input, entry.offset, entry.length),
+    ).read(entry.name, maxSize)
+
+    private fun readCover(input: RemoteInput, entry: Entry) = imageBitmap(readEntry(input, entry, 64 * 1024 * 1024), 360)
+        ?: throw IOException("Imagen de portada no compatible")
 
     /** Signed Long is deliberate: sizes above Long.MAX_VALUE cannot address an Android file. */
     private class HeaderReader(val bytes: ByteArray, var position: Int, var end: Int) {
