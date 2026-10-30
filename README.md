@@ -7,12 +7,18 @@ Aplicación nativa en Kotlin y Jetpack Compose. La interfaz, la lectura y el alm
 - **Libros:** importa archivos con el selector de Android. La aplicación conserva una copia privada y el progreso de lectura.
 - **Estanterías:** organiza los libros descargados. Las descargas SFTP crean automáticamente la estantería con el nombre de sus carpetas padre.
 - **Servidores SFTP:** añade, edita o elimina tantas conexiones como necesites desde Configuración. Cada una aparece por nombre en el menú y conserva su carpeta abierta, catálogo y descargas. Las conexiones y las descargas de servidores distintos funcionan en paralelo.
-- **Biblioteca SFTP:** abrir una carpeta guarda su catálogo, metadatos y miniaturas. Las siguientes visitas usan esa caché; **Sincronizar** vuelve a consultar la carpeta del servidor seleccionado.
+- **Biblioteca SFTP:** abrir una carpeta guarda su catálogo, metadatos y miniaturas. Las siguientes visitas usan esa caché; **Sincronizar** vuelve a consultar la carpeta del servidor seleccionado. El botón Atrás de Android sube a la carpeta superior; desde la raíz del servidor vuelve a Libros.
 - **Descargas:** toca un libro remoto para descargarlo; cuando esté descargado, vuelve a tocarlo para leerlo. También puedes usar su icono o **Descargar todos** en la carpeta actual. Las subcarpetas no se descargan automáticamente.
+- **Lector:** desliza horizontalmente para pasar de página. Un toque en cualquier zona de la página muestra u oculta el título, el botón de volver, las opciones de lectura y el indicador de páginas. Un doble toque amplía la página o restaura el tamaño; también puedes ampliar con dos dedos. Al cambiar de página se conserva la imagen anterior y el indicador de carga aparece únicamente si la espera supera un segundo. Cuando la nueva imagen está lista, entra con un fundido y un desplazamiento corto de 200 ms, respetando el avance, el retroceso y la lectura de derecha a izquierda.
 - **Borrado:** elimina definitivamente la copia local y su progreso. El original SFTP permanece en el servidor. Al vaciar una estantería se ofrece eliminarla.
-- **Configuración:** apariencia, fuentes y servidores SFTP. La pantalla se cierra con la cruz o el botón Atrás. Quitar un servidor conserva los libros descargados. Si eliminas todos, la lista permanece vacía.
+- **Estadísticas de lectura:** acceso al pie del menú lateral. Resume el total de libros, sin leer, leyendo y finalizados, además del progreso de páginas según las posiciones guardadas. Los datos corresponden a los libros de la biblioteca actual y se actualizan al regresar del lector, importar, descargar o borrar.
+- **Configuración:** acceso desde el icono del header. Apariencia, fuentes y servidores SFTP. La pantalla se cierra con la cruz o el botón Atrás. Quitar un servidor conserva los libros descargados. Si eliminas todos, la lista permanece vacía.
 
-El catálogo remoto no guarda archivos completos. Las vistas previas usan lecturas parciales con un límite de 16 MiB por libro en memoria. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero.
+El catálogo remoto no guarda archivos completos. Las fichas aparecen tras listar la carpeta y las portadas y metadatos se completan progresivamente, con un máximo de tres libros procesándose a la vez entre todos los servidores. Cada libro reutiliza su canal de lectura y los CBZ/ZIP acceden directamente al índice, los metadatos y la imagen de portada.
+
+Las vistas previas transfieren únicamente rangos parciales, con un límite de 16 MiB por libro, y reutilizan en memoria los fragmentos ya leídos. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero. Las carpetas guardadas siguen abriéndose desde la caché hasta que se pulsa **Sincronizar**.
+
+Cada carpeta SFTP muestra, cuando se puede consultar, el número de archivos que contiene directamente, de cualquier formato, sin sumar los de sus subcarpetas. El recuento se completa en segundo plano, se guarda en caché y se actualiza con **Sincronizar**. Si el servidor no permite obtenerlo, aparece «Recuento no disponible».
 
 ## Datos
 

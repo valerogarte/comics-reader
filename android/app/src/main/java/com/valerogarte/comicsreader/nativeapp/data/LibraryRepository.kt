@@ -24,12 +24,17 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.ContinuationInterceptor
 
@@ -50,6 +55,8 @@ class LibraryRepository(context: Context) : Closeable {
     private val mutation = Mutex()
     private val configurationMutation = Mutex()
     private val remoteCacheMutation = Mutex()
+    private val previewSlots = Semaphore(PREVIEW_WORKERS)
+    private val folderCountSlots = Semaphore(1)
 
     init { reconcileStorageOnce() }
 
@@ -183,14 +190,17 @@ class LibraryRepository(context: Context) : Closeable {
             if (cached != null && !refresh) return@withLock cached
             val client = clientFor(serverId)
             val previous = cached?.entries?.associateBy { it.path }.orEmpty()
-            val listing = runInterruptible(Dispatchers.IO) { client.listShelf(config.credentials(), config.rootPath, folderPath) }
+            val rawListing = runInterruptible(Dispatchers.IO) { client.listShelf(config.credentials(), config.rootPath, folderPath) }
+            val listing = rawListing
                 .filter { it.directory || BookFormats.supports(it.name) }
                 .sortedWith(compareByDescending<SftpClient.Entry> { it.directory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             val downloads = existingDownloads(config.id)
             val entries = listing.map { item ->
                 val remotePath = join(folderPath, item.name)
                 val old = previous[remotePath]
-                if (old != null && old.isDirectory == item.directory) old.copy(size = item.size, modified = item.modifiedMillis)
+                // A changed file must not inherit a completed preview from its previous version:
+                // the listing is cached before inspection, which can be cancelled at any point.
+                if (old != null && old.isDirectory == item.directory && old.size == item.size && old.modified == item.modifiedMillis) old
                 else RemoteEntry(item.name, remotePath, item.directory, item.size, item.modifiedMillis,
                     title = if (item.directory) item.name else item.name.substringBeforeLast('.', item.name),
                     format = BookFormats.format(item.name), downloadedBookId = downloads[remotePath]?.id, sourceId = config.id)
@@ -199,35 +209,80 @@ class LibraryRepository(context: Context) : Closeable {
             fun snapshot() = RemoteFolder(folderPath, entries.toList(), cachedAt, config.id)
             var folder = snapshot()
             remoteCacheMutation.withLock {
+                database.updateRemoteFileCount(config.id, folderPath, rawListing.count { !it.directory })
                 database.cacheFolder(folder)
                 val listedPaths = entries.mapTo(HashSet()) { it.path }
                 previous.values.filter { it.path !in listedPaths }.forEach { deleteRemoteCover(it.coverPath) }
             }
-            val total = entries.count { !it.isDirectory }
+            val pending = entries.withIndex().filter { !it.value.isDirectory }
+            val directories = entries.withIndex().filter { it.value.isDirectory }
+            val total = pending.size
             var completed = 0
             onUpdate?.invoke(folder, completed, total)
             var lastPublished = System.nanoTime()
-            entries.indices.forEach { index ->
-                currentCoroutineContext().ensureActive()
-                val entry = entries[index]
-                if (entry.isDirectory) return@forEach
-                val old = previous[entry.path]
-                val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
-                val hasCover = old?.coverPath?.let { File(it).isFile } == true
-                if (!unchanged || !hasCover) {
-                    entries[index] = inspectRemote(config, entry, folderPath)
+            coroutineScope {
+                val work = Channel<IndexedValue<RemoteEntry>>(PREVIEW_WORKERS)
+                val results = Channel<Pair<Int, RemoteEntry>>(PREVIEW_WORKERS + 1)
+                launch {
+                    pending.forEach { work.send(it) }
+                    work.close()
                 }
-                completed += 1
-                val now = System.nanoTime()
-                if (onUpdate != null && (completed == total || now - lastPublished >= 100_000_000L)) {
-                    folder = snapshot()
-                    onUpdate.invoke(folder, completed, total)
-                    lastPublished = now
+                // Count only direct children, with one extra listing at a time across servers.
+                // This work runs alongside previews and never blocks their queue.
+                launch {
+                    for ((index, entry) in directories) {
+                        val updated = folderCountSlots.withPermit { countRemoteFiles(config, entry, folderPath) }
+                        results.send(index to updated)
+                    }
+                }
+                repeat(minOf(PREVIEW_WORKERS, total)) {
+                    launch {
+                        for ((index, entry) in work) {
+                            currentCoroutineContext().ensureActive()
+                            val old = previous[entry.path]
+                            val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
+                            val hasCover = old?.coverPath?.let { File(it).isFile } == true
+                            val updated = if (unchanged && hasCover) entry else previewSlots.withPermit {
+                                inspectRemote(config, entry, folderPath)
+                            }
+                            results.send(index to updated)
+                        }
+                    }
+                }
+                // One collector owns the list and progress; a slow book cannot block the others.
+                repeat(total + directories.size) { resultIndex ->
+                    val (index, updated) = results.receive()
+                    entries[index] = updated
+                    if (!updated.isDirectory) completed += 1
+                    val now = System.nanoTime()
+                    val finalUpdate = resultIndex + 1 == total + directories.size
+                    val booksComplete = !updated.isDirectory && completed == total
+                    if (onUpdate != null && (finalUpdate || booksComplete || now - lastPublished >= 100_000_000L)) {
+                        folder = snapshot()
+                        onUpdate.invoke(folder, completed, total)
+                        lastPublished = now
+                    }
                 }
             }
             remoteCacheMutation.withLock { pruneRemoteCovers() }
             snapshot()
         }
+    }
+
+    private suspend fun countRemoteFiles(config: SftpConfig, entry: RemoteEntry, folderPath: String): RemoteEntry {
+        val job = currentCoroutineContext()
+        val count = try {
+            runInterruptible(Dispatchers.IO) {
+                clientFor(config.profileId).countShelfFiles(config.credentials(), config.rootPath, entry.path)
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { job.ensureActive(); null }
+        val updated = entry.copy(fileCount = count)
+        remoteCacheMutation.withLock {
+            job.ensureActive()
+            database.cacheEntry(config.id, folderPath, updated)
+        }
+        return updated
     }
 
     /** Only this explicit action transfers a complete remote book. */
@@ -326,17 +381,25 @@ class LibraryRepository(context: Context) : Closeable {
         val metadata = try {
             var transferred = 0L
             val budget = minOf(16L * 1024 * 1024, (entry.size - 1).coerceAtLeast(0))
-            engine.inspectRemote(entry.name, entry.size, RangeSource { offset, length ->
-                job.ensureActive()
-                require(offset >= 0 && length >= 0 && length <= 4 * 1024 * 1024 && offset <= entry.size && length.toLong() <= entry.size - offset) { "Rango SFTP inválido" }
-                require(transferred + length <= budget) { "Vista previa limitada a lecturas parciales" }
-                transferred += length
-                // RangeSource is synchronous and may run on a native document callback thread.
-                // Keep its blocking SSH call attached to the parent cancellation on that thread.
-                runBlocking(job.minusKey(ContinuationInterceptor)) {
-                    runInterruptible { clientFor(config.profileId).readShelfRange(config.credentials(), config.rootPath, entry.path, offset, length) }
-                }
-            })
+            var reader: SftpClient.RangeReader? = null
+            try {
+                engine.inspectRemote(entry.name, entry.size, RangeSource { offset, length ->
+                    job.ensureActive()
+                    require(offset >= 0 && length >= 0 && length <= 4 * 1024 * 1024 && offset <= entry.size && length.toLong() <= entry.size - offset) { "Rango SFTP inválido" }
+                    require(transferred + length <= budget) { "Vista previa limitada a lecturas parciales" }
+                    transferred += length
+                    // Open lazily: unsupported previews need no channel. Reuse the file handle for
+                    // every range, including calls from a native document callback thread.
+                    runBlocking(job.minusKey(ContinuationInterceptor)) {
+                        runInterruptible {
+                            val source = reader ?: clientFor(config.profileId)
+                                .openShelfReader(config.credentials(), config.rootPath, entry.path).also { reader = it }
+                            require(source.size == entry.size && source.modifiedMillis == entry.modified) { "El archivo SFTP ha cambiado; sincroniza la carpeta" }
+                            source.read(offset, length)
+                        }
+                    }
+                })
+            } finally { reader?.close() }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { job.ensureActive(); return entry }
         try {
@@ -532,6 +595,7 @@ class LibraryRepository(context: Context) : Closeable {
     override fun close() { clients.values.forEach { it.disconnectAll() }; clients.clear(); database.close() }
 
     companion object {
+        private const val PREVIEW_WORKERS = 3
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")

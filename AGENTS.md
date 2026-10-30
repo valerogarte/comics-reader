@@ -14,7 +14,7 @@ La aplicación es exclusivamente Android nativa: Kotlin, Jetpack Compose, SQLite
 
 ## Reglas del producto
 
-- Biblioteca sencilla: Libros, estanterías, SFTP y lector.
+- Biblioteca sencilla: Libros, estanterías, SFTP, lector y estadísticas del progreso guardado.
 - Navegar SFTP guarda únicamente fichas y miniaturas. No descargar libros completos durante el catálogo. Consultar la caché hasta sincronización explícita.
 - Admitir múltiples servidores con operaciones y claves SSH independientes. Pasar siempre el perfil de origen a las operaciones; no inferirlo de la selección actual durante una descarga.
 - El perfil NAS inicial procede de `android/sftp-default.local.json`, ignorado por Git. Nunca emitir ni versionar sus credenciales. Sembrar solo una vez; respetar su eliminación posterior.
@@ -22,6 +22,7 @@ La aplicación es exclusivamente Android nativa: Kotlin, Jetpack Compose, SQLite
 - Las estanterías muestran únicamente archivos descargados.
 - El borrado local es definitivo. No existe papelera. Preguntar si se quiere eliminar una estantería que quede vacía.
 - Ajustes limitados a apariencia, fuentes y SFTP.
+- Configuración desde la cabecera; el pie del menú lateral abre Estadísticas de lectura.
 - Datos en almacenamiento privado Android; credenciales cifradas con Android Keystore. Nunca registrar contraseñas.
 - No borrar ni sobrescribir trabajo ajeno para simplificar cambios.
 

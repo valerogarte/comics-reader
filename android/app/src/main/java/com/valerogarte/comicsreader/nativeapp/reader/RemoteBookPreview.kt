@@ -9,6 +9,31 @@ import java.util.zip.Inflater
 
 /** Read just the ZIP directory, metadata entries and one image/text page from a remote book. */
 internal object RemoteBookPreview {
+    /** Index ZIP comics once and fetch only ComicInfo and the selected cover. */
+    fun comic(name: String, input: RemoteInput): DocumentMetadata {
+        val zip = RemoteZip(input)
+        val images = zip.entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
+            .sortedWith(compareBy(naturalOrder) { it.name })
+        if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
+        val info = zip.entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
+            ?.let { entry -> optionalComicPart { XmlContent.parse(zip.read(entry, 1024 * 1024)) } }
+        val coverIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
+            ?.attr("Image")?.toIntOrNull()?.takeIf { it in images.indices } ?: 0
+        fun cover(index: Int) = optionalComicPart { imageBitmap(zip.read(images[index], 16 * 1024 * 1024), 360) }
+        return DocumentMetadata(
+            title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },
+            author = XmlContent.value(info, "Writer"),
+            description = XmlContent.value(info, "Summary"),
+            publisher = XmlContent.value(info, "Publisher"),
+            pageCount = images.size,
+            cover = cover(coverIndex) ?: if (coverIndex != 0) cover(0) else null,
+        )
+    }
+
+    private inline fun <T> optionalComicPart(read: () -> T): T? = try { read() }
+    catch (unsupported: UnsupportedZipPreviewException) { throw unsupported }
+    catch (_: Exception) { null }
+
     fun inspect(name: String, input: RemoteInput): DocumentMetadata {
         val zip = RemoteZip(input)
         return when (extension(name)) {
@@ -101,6 +126,9 @@ internal fun resolveArchivePath(base: String, href: String): String? {
 
 internal data class RemoteZipEntry(val name: String, val method: Int, val compressedSize: Int, val size: Int, val crc: Long, val offset: Long)
 
+/** Only unsupported ZIP features can use libarchive as a second decoder. */
+internal class UnsupportedZipPreviewException(message: String) : IOException(message)
+
 internal class RemoteZip(private val input: RemoteInput) {
     val entries: List<RemoteZipEntry>
     init {
@@ -119,7 +147,9 @@ internal class RemoteZip(private val input: RemoteInput) {
         val count = u16(tail, eocd + 10)
         val length = u32(tail, eocd + 12)
         val offset = u32(tail, eocd + 16)
-        if (count == 65535 || length > 4 * 1024 * 1024 || offset == 0xffffffffL || offset + length > tailOffset + eocd) throw IOException("Directorio ZIP demasiado grande o ZIP64")
+        if (count == 65535 || length == 0xffffffffL || offset == 0xffffffffL) throw UnsupportedZipPreviewException("Directorio ZIP64")
+        if (length > 4 * 1024 * 1024) throw IOException("Directorio ZIP demasiado grande")
+        if (offset + length > tailOffset + eocd) throw IOException("Directorio ZIP fuera del documento")
         val directory = input.bytes(offset, length.toInt())
         val result = ArrayList<RemoteZipEntry>()
         var position = 0
@@ -135,8 +165,12 @@ internal class RemoteZip(private val input: RemoteInput) {
             val name = String(directory, position + 46, nameLength, if (flags and 0x800 != 0) Charsets.UTF_8 else Charset.forName("CP437"))
             val compressed = u32(directory, position + 20)
             val expanded = u32(directory, position + 24)
+            val localOffset = u32(directory, position + 42)
+            if (compressed == 0xffffffffL || expanded == 0xffffffffL || localOffset == 0xffffffffL) {
+                throw UnsupportedZipPreviewException("Entrada ZIP64")
+            }
             if (flags and 1 == 0 && compressed <= Int.MAX_VALUE && expanded <= Int.MAX_VALUE) {
-                result += RemoteZipEntry(name, method, compressed.toInt(), expanded.toInt(), u32(directory, position + 16), u32(directory, position + 42))
+                result += RemoteZipEntry(name, method, compressed.toInt(), expanded.toInt(), u32(directory, position + 16), localOffset)
             }
             position = end.toInt()
         }
@@ -144,6 +178,7 @@ internal class RemoteZip(private val input: RemoteInput) {
     }
     fun read(name: String, limit: Int): ByteArray = read(entries.firstOrNull { it.name == name } ?: throw IOException("Falta $name"), limit)
     fun read(entry: RemoteZipEntry, limit: Int): ByteArray {
+        if (entry.method != 0 && entry.method != 8) throw UnsupportedZipPreviewException("Compresión ZIP no compatible")
         if (entry.size !in 0..limit || entry.compressedSize !in 0..16 * 1024 * 1024) throw IOException("Entrada ZIP demasiado grande")
         val header = input.bytes(entry.offset, 30)
         if (u32(header, 0) != 0x04034b50L || u16(header, 6) and 1 != 0) throw IOException("Cabecera ZIP no válida")

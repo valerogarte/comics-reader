@@ -18,6 +18,16 @@ data class UiBook(
 
 data class UiShelf(val id: String, val name: String)
 
+data class UiReadingStatistics(
+    val totalBooks: Int = 0,
+    val unreadBooks: Int = 0,
+    val readingBooks: Int = 0,
+    val finishedBooks: Int = 0,
+    val progressPages: Long = 0,
+    val totalPages: Long = 0,
+    val booksWithKnownPages: Int = 0,
+)
+
 data class UiSftpServer(
     val id: String,
     val name: String,
@@ -39,6 +49,7 @@ data class UiRemoteEntry(
     val downloaded: Boolean = false,
     val downloading: Boolean = false,
     val progress: Float = 0f,
+    val fileCount: Int? = null,
 )
 
 data class UiSettings(
@@ -82,7 +93,17 @@ data class AppUiState(
     val settingsVisible: Boolean = false,
     val emptyShelf: UiShelf? = null,
     val reader: UiReaderState? = null,
+    val readingStatistics: UiReadingStatistics = UiReadingStatistics(),
 )
+
+internal fun remoteParentPath(path: String): String =
+    path.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" }
+
+internal fun AppUiState.navigateLibraryBack(actions: AppActions) {
+    if (destination == LibraryDestination.SFTP && remotePath != "/") {
+        actions.onOpenRemoteFolder(remoteParentPath(remotePath))
+    } else actions.onNavigate(LibraryDestination.BOOKS)
+}
 
 interface AppActions {
     fun onNavigate(destination: LibraryDestination, shelfId: String? = null) {}

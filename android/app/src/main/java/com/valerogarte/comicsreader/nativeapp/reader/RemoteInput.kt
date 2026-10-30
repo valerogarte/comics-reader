@@ -2,7 +2,7 @@ package com.valerogarte.comicsreader.nativeapp.reader
 
 import com.artifex.mupdf.fitz.SeekableInputStream
 import java.io.IOException
-import java.util.LinkedHashMap
+import java.util.TreeMap
 import kotlin.math.min
 
 fun interface RangeSource {
@@ -15,37 +15,76 @@ internal class RemoteInput(val size: Long, private val source: RangeSource) : Se
     private var transferred = 0L
     private val limit = min(16L * 1024 * 1024, (size - 1).coerceAtLeast(0))
     private val deadline = System.nanoTime() + 30_000_000_000L
-    private val cached = LinkedHashMap<Pair<Long, Int>, ByteArray>()
-    private val covered = ArrayList<LongRange>()
+    private val cached = TreeMap<Long, ByteArray>()
 
     @Synchronized
     fun bytes(offset: Long, length: Int): ByteArray {
-        if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
-        if (System.nanoTime() > deadline) throw IOException("Tiempo de vista previa agotado")
+        checkAvailable()
         if (length < 0 || offset < 0 || offset > size || length.toLong() > size - offset) {
             throw IOException("Rango fuera del documento")
         }
         if (length == 0) return ByteArray(0)
         if (length > 4 * 1024 * 1024) throw IOException("Rango de vista previa demasiado grande")
-        cached[offset to length]?.let { return it }
-        cached.entries.firstOrNull { (key, _) -> offset >= key.first && offset + length <= key.first + key.second }
-            ?.let { (key, data) -> return data.copyOfRange((offset - key.first).toInt(), (offset - key.first).toInt() + length) }
-        if (transferred + length > limit) throw IOException("Límite de lectura de vista previa alcanzado")
-        // The byte budget also prevents completing the document using overlapping requests.
-        val union = (covered + listOf(offset until offset + length)).sortedBy { it.first }
-        var end = -1L
-        var total = 0L
-        for (range in union) {
-            if (range.first > end) total += range.last - range.first + 1
-            else if (range.last > end) total += range.last - end
-            end = maxOf(end, range.last)
+        val end = offset + length
+        cached.floorEntry(offset)?.let { (start, data) ->
+            if (end <= start + data.size) {
+                if (offset == start && length == data.size) return data
+                val begin = (offset - start).toInt()
+                return data.copyOfRange(begin, begin + length)
+            }
         }
-        if (total >= size) throw IOException("La vista previa no descarga el documento completo")
+
+        // Blocks never overlap: transferred also counts unique cached bytes. The size - 1
+        // limit prevents completing a document, even across many adjacent requests.
+        var position = offset
+        var missing = 0L
+        while (position < end) {
+            checkAvailable()
+            val block = cached.floorEntry(position)
+            val blockEnd = block?.let { it.key + it.value.size } ?: position
+            if (blockEnd > position) position = min(end, blockEnd)
+            else {
+                val gapEnd = min(end, cached.ceilingKey(position) ?: end)
+                missing += gapEnd - position
+                position = gapEnd
+            }
+        }
+        if (transferred + missing > limit) throw IOException("Límite de lectura de vista previa alcanzado")
+        if (missing == length.toLong()) return fetch(offset, length)
+
+        val result = ByteArray(length)
+        position = offset
+        while (position < end) {
+            checkAvailable()
+            val block = cached.floorEntry(position)
+            val blockEnd = block?.let { it.key + it.value.size } ?: position
+            if (block != null && blockEnd > position) {
+                val count = (min(end, blockEnd) - position).toInt()
+                val begin = (position - block.key).toInt()
+                block.value.copyInto(result, (position - offset).toInt(), begin, begin + count)
+                position += count
+            } else {
+                val gapEnd = min(end, cached.ceilingKey(position) ?: end)
+                val count = (gapEnd - position).toInt()
+                fetch(position, count).copyInto(result, (position - offset).toInt())
+                position = gapEnd
+            }
+        }
+        return result
+    }
+
+    private fun checkAvailable() {
+        if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
+        if (System.nanoTime() > deadline) throw IOException("Tiempo de vista previa agotado")
+    }
+
+    /** Called under the monitor, only for a gap already checked against the byte budget. */
+    private fun fetch(offset: Long, length: Int): ByteArray {
+        checkAvailable()
         val data = source.read(offset, length)
         if (data.size != length) throw IOException("Lectura SFTP incompleta")
+        cached[offset] = data
         transferred += data.size
-        covered += offset until offset + length
-        cached[offset to length] = data
         return data
     }
 

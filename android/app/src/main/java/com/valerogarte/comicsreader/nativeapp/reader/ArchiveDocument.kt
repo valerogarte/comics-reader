@@ -154,9 +154,11 @@ internal fun imageBitmap(bytes: ByteArray, width: Int): Bitmap? {
 
 internal val imageExtension = Regex("\\.(jpe?g|png|gif|webp|bmp|avif|heic)$", RegexOption.IGNORE_CASE)
 
+private val naturalOrderParts = Regex("\\d+|\\D+")
+
 internal val naturalOrder = Comparator<String> { a, b ->
-    val left = Regex("\\d+|\\D+").findAll(a.lowercase()).map { it.value }.toList()
-    val right = Regex("\\d+|\\D+").findAll(b.lowercase()).map { it.value }.toList()
+    val left = naturalOrderParts.findAll(a.lowercase()).map { it.value }.toList()
+    val right = naturalOrderParts.findAll(b.lowercase()).map { it.value }.toList()
     var comparison = 0
     for (i in 0 until min(left.size, right.size)) {
         val x = left[i]; val y = right[i]

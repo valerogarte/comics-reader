@@ -74,6 +74,12 @@ class NativeDocumentEngine(context: Context) {
         val input = RemoteInput(size, source)
         return runCatching {
             when (extension(name)) {
+                "cbz", "zip" -> {
+                    try { RemoteBookPreview.comic(name, input) }
+                    catch (_: UnsupportedZipPreviewException) {
+                        ArchiveDocument(BookArchive(remote = input)).use { it.metadata(name) }
+                    }
+                }
                 in comicExtensions -> ArchiveDocument(BookArchive(remote = input)).use { it.metadata(name) }
                 "ofd" -> OfdDocument(BookArchive(remote = input), name).use { it.metadata(name) }
                 "doc", "ppt" -> LegacyOffice.inspectRemote(name, input)

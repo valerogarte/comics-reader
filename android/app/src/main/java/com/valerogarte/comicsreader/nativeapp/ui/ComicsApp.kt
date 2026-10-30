@@ -103,6 +103,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     var pendingDelete by remember { mutableStateOf<List<String>>(emptyList()) }
     var creatingShelf by remember { mutableStateOf(false) }
     var pendingShelfBooks by remember { mutableStateOf<List<String>>(emptyList()) }
+    var statisticsVisible by rememberSaveable { mutableStateOf(false) }
     val gridState = rememberLazyGridState()
     val bookListState = rememberLazyListState()
     var lastCollection by rememberSaveable { mutableStateOf<String?>(null) }
@@ -132,8 +133,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
         when {
             drawer.isOpen -> scope.launch { drawer.close() }
             selected.isNotEmpty() -> selected = emptySet()
-            isRemote && state.remotePath != "/" -> actions.onOpenRemoteFolder(state.remotePath.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" })
-            else -> actions.onNavigate(LibraryDestination.BOOKS)
+            else -> state.navigateLibraryBack(actions)
         }
     }
     ModalNavigationDrawer(
@@ -189,10 +189,10 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         }
                 }
                 NavigationDrawerItem(
-                    label = { Text(stringResource(R.string.native_settings)) },
-                    icon = { Icon(Icons.Default.Settings, null) }, selected = false,
-                    onClick = { scope.launch { drawer.close() }; actions.onShowSettings() },
-                    modifier = Modifier.padding(12.dp),
+                    label = { Text(stringResource(R.string.native_reading_statistics)) },
+                    icon = { Icon(Icons.Default.BarChart, null) }, selected = statisticsVisible,
+                    onClick = { statisticsVisible = true; scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(12.dp).testTag("reading_statistics"),
                 )
             }
         },
@@ -312,6 +312,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
         }
         }
     }
+    if (statisticsVisible) ReadingStatisticsScreen(state.readingStatistics, onClose = { statisticsVisible = false })
     if (creatingShelf || pendingShelfBooks.isNotEmpty()) {
         var name by remember { mutableStateOf("") }
         val addingBooks = pendingShelfBooks.isNotEmpty()
@@ -377,7 +378,7 @@ private fun RemoteNavigation(state: AppUiState, actions: AppActions) {
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp))
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
-                onClick = { actions.onOpenRemoteFolder(state.remotePath.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" }) },
+                onClick = { actions.onOpenRemoteFolder(remoteParentPath(state.remotePath)) },
                 enabled = state.remotePath != "/",
             ) { Icon(Icons.Default.DriveFolderUpload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_parent_folder)) }
             FilledTonalButton(onClick = actions::onDownloadAll, enabled = !state.loading && state.remoteEntries.none { it.downloading } && state.remoteEntries.any { !it.isDirectory && !it.downloaded }) {
@@ -392,7 +393,16 @@ private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
     Surface(Modifier.fillMaxWidth().clickable { actions.onOpenRemoteFolder(folder.path) }, color = MaterialTheme.colorScheme.surfaceContainerLow, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), tint = MaterialTheme.colorScheme.primary)
-            Text(folder.name, Modifier.padding(start = 14.dp).weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.padding(start = 14.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(folder.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val count = folder.fileCount
+                Text(
+                    if (count != null) pluralStringResource(R.plurals.native_folder_files, count, count)
+                    else stringResource(R.string.native_file_count_unavailable),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
             Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

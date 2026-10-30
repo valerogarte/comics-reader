@@ -4,15 +4,19 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
 import com.valerogarte.comicsreader.nativeapp.LibraryViewModel
 import com.valerogarte.comicsreader.nativeapp.ui.AppActions
 import com.valerogarte.comicsreader.nativeapp.ui.ComicsApp
+import com.valerogarte.comicsreader.nativeapp.ui.LibraryDestination
+import com.valerogarte.comicsreader.nativeapp.ui.navigateLibraryBack
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
@@ -30,8 +34,20 @@ class MainActivity : ComponentActivity() {
             override fun onImportFont() { importFont.launch(arrayOf("*/*")) }
             override fun onPickBackground() { importBackground.launch(arrayOf("image/*")) }
         }
+        // Register before Compose so drawer/selection handlers retain priority. The activity
+        // also keeps a fallback that navigates the library instead of finishing its task.
+        val libraryBack = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                model.state.value.navigateLibraryBack(actions)
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, libraryBack)
         setContent {
             val state by model.state.collectAsStateWithLifecycle()
+            SideEffect {
+                libraryBack.isEnabled = state.destination != LibraryDestination.BOOKS &&
+                    state.reader == null && !state.settingsVisible
+            }
             ComicsApp(state, actions)
         }
         if (savedInstanceState == null) importIntent(intent)

@@ -13,7 +13,7 @@ import com.valerogarte.comicsreader.nativeapp.model.RemoteFolder
 import com.valerogarte.comicsreader.nativeapp.model.ShelfEntry
 
 /** The native library has its own database; it never opens or migrates browser storage. */
-internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 1) {
+internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 2) {
     init { setWriteAheadLoggingEnabled(true) }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -41,14 +41,15 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             name TEXT NOT NULL, is_directory INTEGER NOT NULL, size INTEGER NOT NULL,
             modified INTEGER NOT NULL, title TEXT NOT NULL, format TEXT NOT NULL,
             cover_path TEXT, author TEXT NOT NULL, description TEXT NOT NULL,
-            publisher TEXT NOT NULL, page_count INTEGER NOT NULL,
+            publisher TEXT NOT NULL, page_count INTEGER NOT NULL, file_count INTEGER,
             PRIMARY KEY(source_id,path))""")
         db.execSQL("CREATE INDEX remote_parent ON remote_entries(source_id,parent_path)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Add explicit, non-destructive migrations here when the native schema evolves.
-        check(oldVersion == newVersion) { "Unsupported native library database version" }
+        check(oldVersion == 1 && newVersion == 2) { "Unsupported native library database version" }
+        // A nullable addition preserves every book, shelf, cached entry and existing thumbnail.
+        db.execSQL("ALTER TABLE remote_entries ADD COLUMN file_count INTEGER")
     }
 
     fun books(shelfName: String? = null): List<BookEntry> = readableDatabase.query(
@@ -141,7 +142,15 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             put("format", BookFormats.format(entry.name)); put("cover_path", entry.coverPath)
             put("author", entry.author); put("description", entry.description)
             put("publisher", entry.publisher); put("page_count", entry.pageCount)
+            put("file_count", entry.fileCount)
         }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    /** Updates only an already cached directory; never creates a partial folder listing. */
+    fun updateRemoteFileCount(sourceId: String, path: String, count: Int): Int {
+        require(count >= 0) { "El número de archivos no puede ser negativo" }
+        return writableDatabase.update("remote_entries", ContentValues().apply { put("file_count", count) },
+            "source_id=? AND path=? AND is_directory=1", arrayOf(sourceId, path))
     }
 
     fun remoteCoverPaths(): Set<String> = readableDatabase.rawQuery(
@@ -170,10 +179,12 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         coverPath = optional("cover_path"), author = string("author"), description = string("description"),
         publisher = string("publisher"), pageCount = int("page_count"), downloadedBookId = optional("downloaded_book_id"),
         sourceId = string("source_id"),
+        fileCount = optionalInt("file_count"),
     )
 
     private fun Cursor.string(column: String) = getString(getColumnIndexOrThrow(column)) ?: ""
     private fun Cursor.optional(column: String): String? = getColumnIndexOrThrow(column).let { if (isNull(it)) null else getString(it) }
+    private fun Cursor.optionalInt(column: String): Int? = getColumnIndexOrThrow(column).let { if (isNull(it)) null else getInt(it) }
     private fun Cursor.int(column: String) = getInt(getColumnIndexOrThrow(column))
     private fun Cursor.long(column: String) = getLong(getColumnIndexOrThrow(column))
 }

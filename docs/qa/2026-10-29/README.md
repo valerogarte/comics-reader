@@ -31,7 +31,7 @@ SHA-256 del APK instalado en ambos emuladores y entregado:
 53f50986ebfd7c7cdb3a6b1b9006742c68a22789e9c44555a0d177e4a35301d0
 ```
 
-[APK privado 2.1.1](../../../android/app/build/outputs/apk/debug/app-debug.apk). Sus permisos locales son privados porque incorpora el perfil NAS inicial.
+[APK privado 2.1.1](../../../android/app/build/outputs/apk/validated/comics-reader-2.1.1.apk). Sus permisos locales son privados porque incorpora el perfil NAS inicial. Este informe corresponde exclusivamente a la versión 2.1.1.
 
 Los registros completos y la identificación de cada emulador están en [resultados Android 16](final/results-api36.json), [resultados Android 7](final/results-api24.json), [entorno API 36](final/environment-api36.json) y [entorno API 24](final/environment-api24.json).
 

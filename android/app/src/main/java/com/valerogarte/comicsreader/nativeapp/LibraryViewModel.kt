@@ -193,13 +193,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         browser.scanMessage = "Leyendo carpeta"
         mutableState.update { if (it.selectedSftpServerId == serverId) it.copy(error = null) else it }
         publishRemote(serverId)
+        var acceptingUpdates = true
         browser.scanJob = viewModelScope.launch {
             try {
                 val folder = repository.loadRemoteFolder(serverId, path, refresh) { snapshot, completed, total ->
                     viewModelScope.launch {
-                        if (generation == browser.generation && browsers[serverId] === browser) {
+                        if (acceptingUpdates && generation == browser.generation && browsers[serverId] === browser) {
                             browser.folder = snapshot
-                            browser.scanMessage = if (total > 0) "Leyendo portadas y metadatos: $completed de $total" else null
+                            browser.scanMessage = if (total > 0 && completed < total) "Leyendo portadas y metadatos: $completed de $total" else null
                             publishRemote(serverId)
                         }
                     }
@@ -213,6 +214,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 if (generation == browser.generation && mutableState.value.selectedSftpServerId == serverId &&
                     mutableState.value.destination == LibraryDestination.SFTP) report(error)
             } finally {
+                acceptingUpdates = false
                 if (generation == browser.generation) {
                     browser.scanMessage = null
                     publishRemote(serverId)
@@ -547,13 +549,42 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         mutableState.update { it.copy(
             books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName), progress(book)) },
             shelves = shelves, remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
+            readingStatistics = readingStatistics(loadedBooks),
         ) }
+    }
+
+    private fun readingStatistics(books: List<BookEntry>): UiReadingStatistics {
+        var unread = 0
+        var reading = 0
+        var finished = 0
+        var progressPages = 0L
+        var totalPages = 0L
+        var knownPages = 0
+        for (book in books) {
+            when (book.readingStatus) {
+                ReadingStatus.UNREAD -> unread++
+                ReadingStatus.READING -> reading++
+                ReadingStatus.FINISHED -> finished++
+            }
+            if (book.pageCount > 0) {
+                knownPages++
+                val count = book.pageCount.toLong()
+                totalPages += count
+                progressPages += when (book.readingStatus) {
+                    ReadingStatus.UNREAD -> 0L
+                    ReadingStatus.FINISHED -> count
+                    ReadingStatus.READING -> (book.currentPage.toLong() + 1).coerceIn(0L, count)
+                }
+            }
+        }
+        return UiReadingStatistics(books.size, unread, reading, finished, progressPages, totalPages, knownPages)
     }
 
     private fun mapRemote(folder: RemoteFolder, browser: RemoteBrowser): List<UiRemoteEntry> = folder.entries.map { entry ->
         val book = downloadedBooks[folder.sourceId to entry.path]
         UiRemoteEntry(entry.path, entry.name, entry.isDirectory, entry.title, entry.format, entry.size, entry.coverPath,
-            downloaded = book != null, downloading = entry.path in browser.transferringPaths, progress = book?.let(::progress) ?: 0f)
+            downloaded = book != null, downloading = entry.path in browser.transferringPaths, progress = book?.let(::progress) ?: 0f,
+            fileCount = entry.fileCount)
     }
 
     private fun progress(book: BookEntry): Float = when (book.readingStatus) {

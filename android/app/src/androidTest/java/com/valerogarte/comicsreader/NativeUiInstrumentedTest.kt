@@ -225,13 +225,15 @@ class NativeUiInstrumentedTest {
     @Test fun readerTapSwipeRtlZoomAndLoadingGuard() {
         compose.runOnIdle { actions.openReader(page = 1) }
         compose.onNodeWithTag("reader_page").performTouchInput { click(Offset(width * .9f, height * .45f)) }
-        compose.waitUntil(5_000) { actions.pages.lastOrNull() == 2 }
-        compose.runOnIdle { assertEquals(2, actions.pages.last()) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Opciones de lectura").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle { assertTrue(actions.pages.isEmpty()); assertEquals(1, actions.state.reader!!.pageIndex) }
         compose.onNodeWithTag("reader_page").performTouchInput { swipeLeft() }
-        compose.runOnIdle { assertEquals(3, actions.pages.last()); actions.state = actions.state.copy(settings = actions.state.settings.copy(rightToLeft = true)) }
+        compose.runOnIdle { assertEquals(2, actions.pages.last()); actions.state = actions.state.copy(settings = actions.state.settings.copy(rightToLeft = true)) }
         compose.onNodeWithTag("reader_page").performTouchInput { click(Offset(width * .1f, height * .45f)) }
-        compose.waitUntil(5_000) { actions.pages.lastOrNull() == 4 }
-        compose.runOnIdle { assertEquals(4, actions.pages.last()) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Opciones de lectura").fetchSemanticsNodes().size == 1 }
+        compose.runOnIdle { assertEquals(listOf(2), actions.pages) }
+        compose.onNodeWithTag("reader_page").performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals(3, actions.pages.last()) }
         compose.onNodeWithTag("reader_page").performTouchInput { doubleClick(center) }
         compose.onNodeWithTag("reader_page").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Zoom 250 %"))
         compose.onNodeWithContentDescription("Ajustar página").performClick()

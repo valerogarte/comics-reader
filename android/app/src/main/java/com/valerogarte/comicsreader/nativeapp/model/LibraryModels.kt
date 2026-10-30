@@ -37,7 +37,7 @@ data class SftpConfig(
     val name: String = "",
 ) {
     /** Password changes retain the catalog and existing download links. */
-    val id: String get() = MessageDigest.getInstance("SHA-256")
+    val id: String = MessageDigest.getInstance("SHA-256")
         .digest("$host\u0000$port\u0000$username\u0000$rootPath".toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 }
@@ -57,6 +57,8 @@ data class RemoteEntry(
     val pageCount: Int = 0,
     val downloadedBookId: String? = null,
     val sourceId: String? = null,
+    /** Direct files in a directory, including every format; null means not counted yet. */
+    val fileCount: Int? = null,
 )
 
 data class RemoteFolder(

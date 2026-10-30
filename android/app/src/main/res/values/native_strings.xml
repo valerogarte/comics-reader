@@ -21,6 +21,11 @@
     <string name="native_downloaded">Descargado</string>
     <string name="native_downloading">Descargando</string>
     <string name="native_open_folder">Abrir carpeta</string>
+    <string name="native_file_count_unavailable">Recuento no disponible</string>
+    <plurals name="native_folder_files">
+        <item quantity="one">%1$d archivo</item>
+        <item quantity="other">%1$d archivos</item>
+    </plurals>
     <plurals name="native_total_books">
         <item quantity="one">%1$d libro</item>
         <item quantity="other">%1$d libros</item>
@@ -111,4 +116,23 @@
     <string name="native_file_details">%1$s · %2$s</string>
     <string name="native_hide_password">Ocultar contraseña</string>
     <string name="native_show_password">Mostrar contraseña</string>
+    <string name="native_reading_statistics">Estadísticas de lectura</string>
+    <string name="native_statistics_current_library">Tu biblioteca actual</string>
+    <string name="native_statistics_completed_books">Libros finalizados</string>
+    <string name="native_statistics_pages">Progreso de páginas</string>
+    <string name="native_statistics_saved_positions">Basado en la última posición guardada de cada libro con páginas registradas.</string>
+    <string name="native_statistics_open_book">Abre un libro para registrar sus páginas y tu posición de lectura.</string>
+    <string name="native_statistics_empty_library">Añade libros a tu biblioteca para empezar a ver tu progreso.</string>
+    <plurals name="native_statistics_books_progress">
+        <item quantity="one">%1$s de %2$s libro</item>
+        <item quantity="other">%1$s de %2$s libros</item>
+    </plurals>
+    <plurals name="native_statistics_pages_progress">
+        <item quantity="one">%1$s de %2$s página</item>
+        <item quantity="other">%1$s de %2$s páginas</item>
+    </plurals>
+    <plurals name="native_statistics_known_pages_books">
+        <item quantity="one">Páginas registradas en %1$s de %2$s libro.</item>
+        <item quantity="other">Páginas registradas en %1$s de %2$s libros.</item>
+    </plurals>
 </resources>

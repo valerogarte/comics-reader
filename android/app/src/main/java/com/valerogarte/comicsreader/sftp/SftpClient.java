@@ -1,5 +1,6 @@
 package com.valerogarte.comicsreader.sftp;
 
+import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.ChannelSubsystem;
 import com.jcraft.jsch.JSch;
@@ -10,6 +11,7 @@ import com.jcraft.jsch.SftpException;
 import com.jcraft.jsch.UIKeyboardInteractive;
 import com.jcraft.jsch.UserInfo;
 import java.io.File;
+import java.io.Closeable;
 import java.io.FileOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
@@ -21,7 +23,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +33,7 @@ import java.util.Vector;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Plain JSch wrapper (no Android dependencies) that keeps one SSH session per set of credentials. */
 public final class SftpClient {
@@ -134,76 +139,240 @@ public final class SftpClient {
         });
     }
 
+    /** Counts direct regular-file children without retaining their directory entries or opening books. */
+    public int countShelfFiles(Credentials credentials, String rootPath, String relativePath)
+        throws JSchException, SftpException {
+        return withChannel(credentials, (channel, guard) -> {
+            String root = channel.realpath(normalizeShelfPath(rootPath));
+            String path = shelfPath(channel, root, relativePath);
+            long[] count = { 0 };
+            ArrayDeque<String> links = new ArrayDeque<>();
+            SftpException[] failure = { null };
+            channel.ls(literalPath(path), rawEntry -> {
+                try {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP listing cancelled",
+                            new IOException("SFTP operation cancelled"));
+                    }
+                    guard.activity();
+                    String name = rawEntry.getFilename();
+                    if (!isShelfEntryName(name)) return ChannelSftp.LsEntrySelector.CONTINUE;
+                    SftpATTRS attrs = rawEntry.getAttrs();
+                    // The selector runs while JSch decodes READDIR; defer other requests on this channel.
+                    if (attrs.isLink()) links.addLast(name);
+                    else if (attrs.isReg()) count[0]++;
+                    return ChannelSftp.LsEntrySelector.CONTINUE;
+                } catch (SftpException error) {
+                    failure[0] = error;
+                    return ChannelSftp.LsEntrySelector.BREAK;
+                }
+            });
+            if (failure[0] != null) throw failure[0];
+            for (String name : links) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP listing cancelled",
+                        new IOException("SFTP operation cancelled"));
+                }
+                guard.activity();
+                try {
+                    String target = channel.realpath(join(path, name));
+                    if (!insideRoot(root, target)) continue;
+                    if (channel.stat(literalPath(target)).isReg()) count[0]++;
+                } catch (SftpException error) {
+                    if (error.id != ChannelSftp.SSH_FX_NO_SUCH_FILE) throw error;
+                }
+            }
+            if (count[0] > Integer.MAX_VALUE) {
+                throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Too many SFTP files to count");
+            }
+            return (int) count[0];
+        });
+    }
+
     /** Reads only the requested bytes without creating a temporary comic file. */
     public byte[] readShelfRange(Credentials credentials, String rootPath, String relativePath, long offset, int length)
         throws JSchException, SftpException {
-        if (offset < 0 || offset > 9007199254740991L || length < 0 || length > MAX_RANGE_SIZE
-            || offset > 9007199254740991L - length) {
-            throw new IllegalArgumentException("Invalid SFTP byte range");
+        validateRange(offset, length);
+        try (RangeReader reader = openShelfReader(credentials, rootPath, relativePath)) {
+            return reader.read(offset, length);
         }
-        return withChannel(credentials, (channel, guard) -> {
+    }
+
+    /** A book preview resolves its confined path once and reuses its own read-only SFTP handle. */
+    public RangeReader openShelfReader(Credentials credentials, String rootPath, String relativePath)
+        throws JSchException, SftpException {
+        ResolvedFile file = withChannel(credentials, (channel, guard) -> {
             String root = channel.realpath(normalizeShelfPath(rootPath));
             String path = shelfPath(channel, root, relativePath);
             SftpATTRS attrs = channel.stat(literalPath(path));
             if (!attrs.isReg()) throw new IllegalArgumentException("Expected an SFTP file");
-            int count = (int) Math.min(length, Math.max(0, attrs.getSize() - offset));
-            if (count == 0) return new byte[0];
-            try {
-                return readExactRange(channel.getSession(), path, offset, count, rangeTimeoutMillis);
-            } catch (IOException e) {
-                throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not read SFTP byte range", e);
-            }
+            if (attrs.getSize() < 0) throw new IllegalArgumentException("Invalid SFTP file size");
+            return new ResolvedFile(channel.getSession(), path, attrs.getSize(), attrs.getMTime() * 1000L);
         });
+        try {
+            return new RangeReader(file.session, file.path, file.size, file.modifiedMillis, rangeTimeoutMillis);
+        } catch (IOException error) {
+            throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not open SFTP byte range reader", error);
+        }
     }
 
-    /** JSch's file InputStream prefetches 32 KiB even for read(1); this small v3 exchange does not. */
-    private static byte[] readExactRange(Session session, String path, long offset, int count, int timeoutMillis)
-        throws JSchException, SftpException, IOException {
-        long deadline = System.nanoTime() + timeoutMillis * 1000000L;
-        ChannelSubsystem channel = (ChannelSubsystem) session.openChannel("subsystem");
-        channel.setSubsystem("sftp");
-        channel.setWantReply(true);
-        try {
-            DataInputStream input = new DataInputStream(channel.getInputStream());
-            DataOutputStream output = new DataOutputStream(channel.getOutputStream());
-            channel.connect(Math.min(CONNECT_TIMEOUT_MS, timeoutMillis));
-            sendSftpPacket(output, 1, 3, new byte[0]); // INIT, client version 3.
-            DataInputStream version = receiveSftpPacket(input, channel, deadline);
-            if (version.readUnsignedByte() != 2 || version.readInt() != 3) throw new IOException("Unsupported SFTP version");
+    private static final class ResolvedFile {
+        final Session session;
+        final String path;
+        final long size;
+        final long modifiedMillis;
+        ResolvedFile(Session session, String path, long size, long modifiedMillis) {
+            this.session = session; this.path = path; this.size = size; this.modifiedMillis = modifiedMillis;
+        }
+    }
 
-            byte[] pathBytes = path.getBytes(StandardCharsets.UTF_8);
-            if (pathBytes.length > 16384) throw new IOException("SFTP path too long");
-            ByteArrayOutputStream openBytes = new ByteArrayOutputStream();
-            DataOutputStream open = new DataOutputStream(openBytes);
-            writeSftpString(open, pathBytes);
-            open.writeInt(1); // SSH_FXF_READ only: no create, append or write flags.
-            open.writeInt(0); // Empty attributes.
-            int requestId = 1;
-            sendSftpPacket(output, 3, requestId, openBytes.toByteArray()); // OPEN.
-            DataInputStream opened = receiveSftpResponse(input, requestId, 102, false, channel, deadline);
-            byte[] handle = readSftpString(opened, 256);
-            ByteArrayOutputStream result = new ByteArrayOutputStream(count);
-            while (result.size() < count) {
-                if (Thread.currentThread().isInterrupted()) throw new IOException("SFTP range cancelled");
-                int requested = Math.min(32768, count - result.size());
-                ByteArrayOutputStream readBytes = new ByteArrayOutputStream();
-                DataOutputStream read = new DataOutputStream(readBytes);
-                writeSftpString(read, handle);
-                read.writeLong(offset + result.size());
-                read.writeInt(requested);
-                sendSftpPacket(output, 5, ++requestId, readBytes.toByteArray()); // READ, exact remaining length.
-                DataInputStream data = receiveSftpResponse(input, requestId, 103, true, channel, deadline);
-                if (data == null) break; // Remote file became shorter between STAT and READ.
-                byte[] bytes = readSftpString(data, requested);
-                if (bytes.length == 0 || data.available() > 1) throw new IOException("Invalid SFTP data response");
-                result.write(bytes);
+    private static void validateRange(long offset, int length) {
+        if (offset < 0 || offset > 9007199254740991L || length < 0 || length > MAX_RANGE_SIZE
+            || offset > 9007199254740991L - length) {
+            throw new IllegalArgumentException("Invalid SFTP byte range");
+        }
+    }
+
+    /** Exact SFTP v3 reads, with at most four requests in flight and no bytes outside the range. */
+    public static final class RangeReader implements Closeable {
+        private static final int PIPELINE_SIZE = 4;
+        private static final int READ_SIZE = 32768;
+        public final long size;
+        public final long modifiedMillis;
+        private final int timeoutMillis;
+        private final ChannelSubsystem channel;
+        private final DataInputStream input;
+        private final DataOutputStream output;
+        private final byte[] handle;
+        private final AtomicBoolean closed = new AtomicBoolean();
+        private int requestId = 1;
+
+        private RangeReader(Session session, String path, long size, long modifiedMillis, int timeoutMillis)
+            throws JSchException, SftpException, IOException {
+            this.size = size;
+            this.modifiedMillis = modifiedMillis;
+            this.timeoutMillis = timeoutMillis;
+            channel = (ChannelSubsystem) session.openChannel("subsystem");
+            channel.setSubsystem("sftp");
+            channel.setWantReply(true);
+            ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+            try {
+                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                input = new DataInputStream(channel.getInputStream());
+                output = new DataOutputStream(channel.getOutputStream());
+                channel.connect(Math.min(CONNECT_TIMEOUT_MS, timeoutMillis));
+                sendSftpPacket(output, 1, 3, new byte[0]); // INIT, client version 3.
+                DataInputStream version = receiveSftpPacket(input, channel, deadline);
+                if (version.readUnsignedByte() != 2 || version.readInt() != 3) throw new IOException("Unsupported SFTP version");
+                byte[] pathBytes = path.getBytes(StandardCharsets.UTF_8);
+                if (pathBytes.length > 16384) throw new IOException("SFTP path too long");
+                ByteArrayOutputStream openBytes = new ByteArrayOutputStream();
+                DataOutputStream open = new DataOutputStream(openBytes);
+                writeSftpString(open, pathBytes);
+                open.writeInt(1); // SSH_FXF_READ only: no create, append or write flags.
+                open.writeInt(0); // Empty attributes.
+                sendSftpPacket(output, 3, requestId, openBytes.toByteArray());
+                DataInputStream opened = receiveSftpResponse(input, requestId, 102, false, channel, deadline);
+                handle = readSftpString(opened, 256);
+                if (handle.length == 0) throw new IOException("Invalid SFTP file handle");
+                guard.check();
+            } catch (JSchException | SftpException | IOException | RuntimeException | Error error) {
+                close();
+                throw error;
+            } finally { guard.close(); }
+        }
+
+        /** Calls may come from different document callback threads; each call has its own deadline. */
+        public synchronized byte[] read(long offset, int length) throws SftpException {
+            validateRange(offset, length);
+            if (closed.get()) throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP range reader is closed");
+            int count = (int) Math.min(length, Math.max(0, size - offset));
+            if (count == 0) return new byte[0];
+            ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+            try {
+                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                byte[] result = readRange(offset, count, deadline);
+                guard.check();
+                return result;
+            } catch (IOException error) {
+                close();
+                throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not read SFTP byte range", error);
+            } catch (SftpException | RuntimeException | Error error) {
+                close();
+                throw error;
+            } finally { guard.close(); }
+        }
+
+        private byte[] readRange(long offset, int count, long deadline) throws IOException, SftpException {
+            byte[] result = new byte[count];
+            BitSet received = new BitSet(count);
+            Map<Integer, PendingRead> pending = new HashMap<>();
+            ArrayDeque<PendingRead> retries = new ArrayDeque<>();
+            long nextOffset = offset;
+            long end = offset + count;
+            while (true) {
+                while (pending.size() < PIPELINE_SIZE) {
+                    PendingRead request = retries.pollFirst();
+                    if (request == null) {
+                        if (nextOffset >= end) break;
+                        int length = (int) Math.min(READ_SIZE, end - nextOffset);
+                        request = new PendingRead(nextOffset, length);
+                        nextOffset += length;
+                    } else if (request.offset >= end) continue;
+                    else request = new PendingRead(request.offset, (int) Math.min(request.length, end - request.offset));
+                    if (Thread.currentThread().isInterrupted()) throw new IOException("SFTP range cancelled");
+                    if (System.nanoTime() >= deadline) throw new SocketTimeoutException("SFTP range deadline exceeded");
+                    ByteArrayOutputStream payload = new ByteArrayOutputStream();
+                    DataOutputStream read = new DataOutputStream(payload);
+                    writeSftpString(read, handle);
+                    read.writeLong(request.offset);
+                    read.writeInt(request.length);
+                    if (++requestId <= 0) requestId = 1;
+                    sendSftpPacket(output, 5, requestId, payload.toByteArray());
+                    pending.put(requestId, request);
+                }
+                if (pending.isEmpty()) break;
+                DataInputStream response = receiveSftpPacket(input, channel, deadline);
+                int type = response.readUnsignedByte();
+                PendingRead request = pending.remove(response.readInt());
+                if (request == null) throw new IOException("Unexpected SFTP response identifier");
+                if (type == 101) {
+                    int status = response.readInt();
+                    if (status != ChannelSftp.SSH_FX_EOF) throw new SftpException(status, "SFTP range request failed");
+                    end = Math.min(end, request.offset);
+                } else if (type == 103) {
+                    byte[] bytes = readSftpString(response, request.length);
+                    boolean eof = false;
+                    if (response.available() == 1) {
+                        int flag = response.readUnsignedByte();
+                        if (flag > 1) throw new IOException("Invalid SFTP end-of-file flag");
+                        eof = flag == 1;
+                    } else if (response.available() != 0) throw new IOException("Invalid SFTP data response");
+                    if (bytes.length == 0 && !eof) throw new IOException("Empty SFTP data response");
+                    int position = (int) (request.offset - offset);
+                    System.arraycopy(bytes, 0, result, position, bytes.length);
+                    received.set(position, position + bytes.length);
+                    if (eof) end = Math.min(end, request.offset + bytes.length);
+                    else if (bytes.length < request.length) {
+                        retries.addFirst(new PendingRead(request.offset + bytes.length, request.length - bytes.length));
+                    }
+                } else throw new IOException("Unexpected SFTP response type");
             }
-            ByteArrayOutputStream closeBytes = new ByteArrayOutputStream();
-            writeSftpString(new DataOutputStream(closeBytes), handle);
-            sendSftpPacket(output, 4, ++requestId, closeBytes.toByteArray()); // CLOSE and wait for acknowledgement.
-            receiveSftpResponse(input, requestId, 101, false, channel, deadline);
-            return result.toByteArray();
-        } finally { channel.disconnect(); }
+            int available = (int) (end - offset);
+            if (received.nextClearBit(0) < available) throw new IOException("Incomplete SFTP range response");
+            return available == count ? result : Arrays.copyOf(result, available);
+        }
+
+        /** Closing the dedicated subsystem releases all its handles, without draining queued replies. */
+        @Override public void close() {
+            if (closed.compareAndSet(false, true)) channel.disconnect();
+        }
+    }
+
+    private static final class PendingRead {
+        final long offset;
+        final int length;
+        PendingRead(long offset, int length) { this.offset = offset; this.length = length; }
     }
 
     private static void sendSftpPacket(DataOutputStream output, int type, int id, byte[] payload) throws IOException {
@@ -424,7 +593,7 @@ public final class SftpClient {
 
     /** SSH keepalives do not prove that the SFTP subsystem is answering requests. */
     private static final class ChannelGuard {
-        private final ChannelSftp channel;
+        private final Channel channel;
         private final Thread worker = Thread.currentThread();
         private final long idleNanos;
         private volatile long deadline;
@@ -433,7 +602,7 @@ public final class SftpClient {
         volatile boolean cancelled;
         private final ScheduledFuture<?> watch;
 
-        ChannelGuard(ChannelSftp channel, int timeoutMillis) {
+        ChannelGuard(Channel channel, int timeoutMillis) {
             this.channel = channel;
             idleNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
             deadline = System.nanoTime() + idleNanos;
