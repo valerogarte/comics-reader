@@ -2,6 +2,7 @@ package com.valerogarte.comicsreader.nativeapp.reader
 
 import java.io.IOException
 import java.nio.charset.CodingErrorAction
+import java.text.Normalizer
 import java.util.zip.CRC32
 
 /** Indexes RAR5 headers and presents one independent file to libarchive at a time. */
@@ -83,7 +84,26 @@ internal object Rar5RemotePreview {
                         if (record.vint() in setOf(1L, 5L)) return null
                         extras.position = recordEnd
                     }
-                    if (fileFlags and 1L == 0L) entries += Entry(entryName, offset, headerSize + dataSize)
+                    if (fileFlags and 1L == 0L) {
+                        entries += Entry(entryName, offset, headerSize + dataSize)
+                        if (imageExtension.containsMatchIn(entryName) && isLikelyCover(entryName)) {
+                            val images = entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
+                                .sortedWith { a, b -> naturalOrder.compare(a.name, b.name) }
+                            val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
+                                ?.let { runCatching { XmlContent.parse(readEntry(input, it, 1024 * 1024)) }.getOrNull() }
+                            val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
+                                ?.attr("Image")?.toIntOrNull()
+                            if (metadataIndex == null || metadataIndex in images.indices) {
+                                val coverIndex = comicCoverIndex(name, images.map { it.name }, metadataIndex)
+                                return DocumentMetadata(
+                                    title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },
+                                    author = XmlContent.value(info, "Writer"), description = XmlContent.value(info, "Summary"),
+                                    publisher = XmlContent.value(info, "Publisher"), pageCount = 0,
+                                    cover = readCover(input, images[coverIndex]),
+                                )
+                            }
+                        }
+                    }
                 }
                 3L -> if (!sawMain) return null // Service data is not needed for file extraction.
                 4L -> return null // Archive encryption.
@@ -100,22 +120,34 @@ internal object Rar5RemotePreview {
         val images = entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
             .sortedWith { a, b -> naturalOrder.compare(a.name, b.name) }
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
-        fun read(entry: Entry, maxSize: Int): ByteArray = BookArchive(
-            remote = EntryInput(input, entry.offset, entry.length),
-        ).read(entry.name, maxSize)
+        fun read(entry: Entry, maxSize: Int): ByteArray = readEntry(input, entry, maxSize)
         val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
             ?.let { runCatching { XmlContent.parse(read(it, 1024 * 1024)) }.getOrNull() }
         val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
             ?.attr("Image")?.toIntOrNull()
         val coverIndex = comicCoverIndex(name, images.map { it.name }, metadataIndex)
-        fun cover(index: Int) = imageBitmap(read(images[index], 64 * 1024 * 1024), 360)
-            ?: throw IOException("Imagen de portada no compatible")
+        fun cover(index: Int) = readCover(input, images[index])
         val cover = if (coverIndex == 0) cover(0) else runCatching { cover(coverIndex) }.getOrElse { cover(0) }
         return DocumentMetadata(
             title = XmlContent.value(info, "Title").ifBlank { baseTitle(name) },
             author = XmlContent.value(info, "Writer"), description = XmlContent.value(info, "Summary"),
             publisher = XmlContent.value(info, "Publisher"), pageCount = images.size, cover = cover,
         )
+    }
+
+    private fun readEntry(input: RemoteInput, entry: Entry, maxSize: Int): ByteArray = BookArchive(
+        remote = EntryInput(input, entry.offset, entry.length),
+    ).read(entry.name, maxSize)
+
+    private fun readCover(input: RemoteInput, entry: Entry) = imageBitmap(readEntry(input, entry, 64 * 1024 * 1024), 360)
+        ?: throw IOException("Imagen de portada no compatible")
+
+    private fun isLikelyCover(name: String): Boolean {
+        val stem = Normalizer.normalize(name.substringAfterLast('/').substringBeforeLast('.').lowercase(), Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+        if (Regex("^0*1(?:\\D|$)").containsMatchIn(stem)) return true
+        return stem.split(Regex("[^a-z0-9]+"))
+            .any { it in setOf("cover", "frontcover", "folder", "poster", "portada", "caratula") }
     }
 
     /** Signed Long is deliberate: sizes above Long.MAX_VALUE cannot address an Android file. */

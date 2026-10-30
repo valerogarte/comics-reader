@@ -21,11 +21,15 @@ internal class PreviewRangeException : IOException("Rango de vista previa invál
 internal class PreviewIncompleteException : IOException("Lectura SFTP incompleta")
 
 /** A memory-only preview transport. It cannot fetch a complete remote document. */
-internal class RemoteInput(override val size: Long, private val source: RangeSource) : ArchiveInput {
+internal class RemoteInput(
+    override val size: Long,
+    private val source: RangeSource,
+    previewTimeoutMillis: Long = 30_000,
+) : ArchiveInput {
     private var cursor = 0L
     private var transferred = 0L
     private val limit = min(16L * 1024 * 1024, (size - 1).coerceAtLeast(0))
-    private val deadline = System.nanoTime() + 30_000_000_000L
+    private val deadline = System.nanoTime() + previewTimeoutMillis * 1_000_000L
     private val cached = TreeMap<Long, ByteArray>()
     private val failure = AtomicReference<IOException?>(null)
 

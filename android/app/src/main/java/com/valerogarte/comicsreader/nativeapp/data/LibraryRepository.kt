@@ -636,7 +636,7 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
-        private const val REMOTE_PREVIEW_VERSION = 5
+        private const val REMOTE_PREVIEW_VERSION = 8
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")
