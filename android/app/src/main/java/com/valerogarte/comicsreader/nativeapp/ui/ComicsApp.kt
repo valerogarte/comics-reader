@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.valerogarte.comicsreader.BuildConfig
 import com.valerogarte.comicsreader.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -193,6 +194,13 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                     icon = { Icon(Icons.Default.BarChart, null) }, selected = statisticsVisible,
                     onClick = { statisticsVisible = true; scope.launch { drawer.close() } },
                     modifier = Modifier.padding(12.dp).testTag("reading_statistics"),
+                )
+                Text(
+                    text = stringResource(R.string.native_app_version, BuildConfig.VERSION_NAME),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
         },

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="native_app_name">Mi biblioteca</string>
+    <string name="native_app_version">Versión %1$s</string>
+    <string name="native_reading_mode">Modo de lectura</string>
+    <string name="native_reading_horizontal">Horizontal</string>
+    <string name="native_reading_vertical">Scroll vertical</string>
     <string name="native_books">Libros</string>
     <string name="native_sftp_library">Biblioteca SFTP</string>
     <string name="native_shelves">Estanterías</string>
