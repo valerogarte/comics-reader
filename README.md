@@ -18,7 +18,7 @@ Aplicación nativa en Kotlin y Jetpack Compose. La interfaz, la lectura y el alm
 
 El catálogo remoto no guarda archivos completos. Las fichas aparecen tras listar la carpeta y las portadas y metadatos se completan progresivamente, con un máximo de tres libros procesándose a la vez entre todos los servidores. Cada libro reutiliza su canal de lectura y los CBZ/ZIP acceden directamente al índice, los metadatos y la imagen de portada.
 
-Las vistas previas transfieren únicamente rangos parciales, con un límite de 16 MiB por libro, y reutilizan en memoria los fragmentos ya leídos. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero. Las carpetas guardadas siguen abriéndose desde la caché hasta que se pulsa **Sincronizar**.
+Las vistas previas transfieren únicamente rangos parciales, con un límite de 16 MiB por libro, y reutilizan en memoria los fragmentos ya leídos. Las lecturas SFTP permiten respuestas SSH de hasta 64 KiB y canalizan hasta 16 bloques de archivo para reducir las esperas de red. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero. Las carpetas guardadas siguen abriéndose desde la caché hasta que se pulsa **Sincronizar**.
 
 En los archivos CBR con RAR4 o RAR5 no sólido, cuando su estructura lo permite, se leen las cabeceras por separado y solo se extraen la portada y los metadatos necesarios. Los fallos temporales de conexión se reintentan al sincronizar; los formatos que no pueden obtenerse con la lectura parcial se conservan en caché hasta que cambie el archivo o el extractor.
 

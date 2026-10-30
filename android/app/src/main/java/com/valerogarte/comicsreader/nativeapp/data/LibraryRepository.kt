@@ -388,12 +388,9 @@ class LibraryRepository(context: Context) : Closeable {
 
     private suspend fun inspectRemote(config: SftpConfig, entry: RemoteEntry, folderPath: String): RemoteEntry {
         val job = currentCoroutineContext()
-        var transferred = 0L
-        var diagnosticReads = 0
-        val diagnosticStart = System.nanoTime()
-        val diagnostic = entry.name in setOf("1984.cbr", "100_Pesetas.cbr", "Adrastea.cbr")
         val metadata = try {
             val budget = minOf(16L * 1024 * 1024, (entry.size - 1).coerceAtLeast(0))
+            var transferred = 0L
             var reader: SftpClient.RangeReader? = null
             try {
                 engine.inspectRemoteStrict(entry.name, entry.size, RangeSource { offset, length ->
@@ -401,7 +398,6 @@ class LibraryRepository(context: Context) : Closeable {
                     if (offset < 0 || length < 0 || length > 4 * 1024 * 1024 || offset > entry.size || length.toLong() > entry.size - offset) throw PreviewRangeException()
                     if (transferred + length > budget) throw PreviewLimitException()
                     transferred += length
-                    if (diagnostic && ++diagnosticReads % 25 == 0) android.util.Log.i("ComicsPreviewDiag", "${entry.name} reads=$diagnosticReads bytes=$transferred elapsedMs=${(System.nanoTime() - diagnosticStart) / 1_000_000}")
                     // Open lazily: unsupported previews need no channel. Reuse the file handle for
                     // every range, including calls from a native document callback thread.
                     runBlocking(job.minusKey(ContinuationInterceptor)) {
@@ -409,10 +405,7 @@ class LibraryRepository(context: Context) : Closeable {
                             val source = reader ?: clientFor(config.profileId)
                                 .openShelfReader(config.credentials(), config.rootPath, entry.path).also { reader = it }
                             require(source.size == entry.size && source.modifiedMillis == entry.modified) { "El archivo SFTP ha cambiado; sincroniza la carpeta" }
-                            val readStarted = System.nanoTime()
-                            source.read(offset, length).also {
-                                if (diagnostic && length >= 4096) android.util.Log.i("ComicsPreviewDiag", "${entry.name} range=$length elapsedMs=${(System.nanoTime() - readStarted) / 1_000_000}")
-                            }
+                            source.read(offset, length)
                         }
                     }
                 })
@@ -423,7 +416,6 @@ class LibraryRepository(context: Context) : Closeable {
             // Retry network and timeout failures on the next explicit synchronization;
             // cache unsupported or over-budget files to avoid repeating expensive work.
             val retryable = (error as? RemotePreviewFailure)?.retryable ?: true
-            if (diagnostic) android.util.Log.w("ComicsPreviewDiag", "${entry.name} failed type=${error.javaClass.simpleName} cause=${error.cause?.javaClass?.simpleName} retry=$retryable reads=$diagnosticReads bytes=$transferred elapsedMs=${(System.nanoTime() - diagnosticStart) / 1_000_000}")
             val attempted = entry.copy(previewVersion = if (retryable) 0 else REMOTE_PREVIEW_VERSION)
             remoteCacheMutation.withLock {
                 job.ensureActive()
@@ -432,7 +424,6 @@ class LibraryRepository(context: Context) : Closeable {
             return attempted
         }
         try {
-            if (diagnostic) android.util.Log.i("ComicsPreviewDiag", "${entry.name} complete cover=${metadata.cover != null} pages=${metadata.pageCount} reads=$diagnosticReads bytes=$transferred elapsedMs=${(System.nanoTime() - diagnosticStart) / 1_000_000}")
             return remoteCacheMutation.withLock {
                 job.ensureActive()
                 var coverWriteFailed = false
@@ -645,7 +636,7 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
-        private const val REMOTE_PREVIEW_VERSION = 4
+        private const val REMOTE_PREVIEW_VERSION = 5
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")
