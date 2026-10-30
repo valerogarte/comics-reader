@@ -33,6 +33,10 @@ def reset_files():
         if not link.exists(): link.symlink_to('../outside',target_is_directory=True)
         (root/'library/slow.txt').write_text(('Long local fixture text for native pagination.\n'*100000),encoding='utf-8')
         (root/'library/readme.txt').write_text('Simple native library fixture.\n'*6000,encoding='utf-8')
+        linked=root/'library/linked'; linked.mkdir(exist_ok=True)
+        for index in range(8):
+            target=linked/f'link-{index}.txt'
+            if not target.is_symlink(): target.symlink_to('../readme.txt')
         (root/'library/who?.txt').write_bytes(b'question mark literal\n')
         (root/'library/whoA.txt').write_bytes(b'other wildcard match\n')
 reset_files()

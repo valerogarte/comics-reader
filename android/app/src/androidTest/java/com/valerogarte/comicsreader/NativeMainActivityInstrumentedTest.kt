@@ -64,7 +64,7 @@ class NativeMainActivityInstrumentedTest {
     private val imageName = "$prefix.png"
     private val fontName = "$prefix.ttf"
     private val textName = "$prefix.txt"
-    private val appearanceKeys = setOf("theme", "background", "font", "fontSize", "fontPath", "backgroundImagePath", "keepScreenOn", "rightToLeft")
+    private val appearanceKeys = setOf("theme", "background", "font", "fontSize", "fontPath", "backgroundImagePath", "keepScreenOn", "rightToLeft", "readingMode", "readerTransition")
 
     @Before fun prepareEmulatorOnly() {
         val emulator = Build.FINGERPRINT.lowercase().let { it.contains("generic") || it.contains("emulator") || it.contains("sdk_gphone") } || Build.HARDWARE in setOf("ranchu", "goldfish")
@@ -132,14 +132,17 @@ class NativeMainActivityInstrumentedTest {
         compose.onNodeWithTag("book:${book.id}").performClick()
         await("native PDF page") { model.state.value.reader?.bookId == book.id && model.state.value.reader?.bitmap != null && model.state.value.reader?.loading == false }
         compose.onNodeWithContentDescription("Página siguiente").performClick()
-        await("second page") { model.state.value.reader?.pageIndex == 1 && model.state.value.reader?.loading == false }
+        awaitDisplayedPage(book.id, 1)
         device.pressKeyCode(KeyEvent.KEYCODE_VOLUME_DOWN)
-        await("volume down turns to the third page") { model.state.value.reader?.pageIndex == 2 && model.state.value.reader?.loading == false }
+        awaitDisplayedPage(book.id, 2)
         device.pressKeyCode(KeyEvent.KEYCODE_VOLUME_UP)
         await("volume up returns to the second page") { model.state.value.reader?.pageIndex == 1 && model.state.value.reader?.loading == false }
+        // Recreate immediately, while the final navigation can still be in
+        // flight. A restored PagerState must not overwrite that retained request.
         scenario!!.recreate()
         scenario!!.onActivity { model = ViewModelProvider(it)[LibraryViewModel::class.java] }
         await("reader retained after Activity recreation") { model.state.value.reader?.bookId == book.id && model.state.value.reader?.pageIndex == 1 && model.state.value.reader?.bitmap != null }
+        awaitDisplayedPage(book.id, 1)
         compose.onNodeWithText("2 de 3").assertIsDisplayed()
         captureEvidence("saf-reader")
         device.pressBack()
@@ -151,10 +154,13 @@ class NativeMainActivityInstrumentedTest {
         compose.onNodeWithTag("book:${book.id}").assertIsDisplayed()
 
         compose.onNodeWithContentDescription("Configuración").performClick()
+        compose.onNodeWithTag("settings_section:typography").performScrollTo().performClick()
         compose.onNodeWithText("Añadir fuente TTF u OTF").performScrollTo().performClick()
         chooseDocument(fontName)
         await("custom font copied into private storage") { model.state.value.settings.fontPath?.let { it != baselineAppearance["fontPath"] && it !in baselineAppearanceFiles && File(it).isFile } == true }
         assertEquals("custom", model.state.value.settings.font)
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_section:appearance").performScrollTo().performClick()
         compose.onNodeWithText("Elegir imagen de fondo").performScrollTo().performClick()
         chooseDocument(imageName)
         await("background copied into private storage") { model.state.value.settings.backgroundImagePath?.let { it != baselineAppearance["backgroundImagePath"] && it !in baselineAppearanceFiles && File(it).isFile } == true }
@@ -174,9 +180,10 @@ class NativeMainActivityInstrumentedTest {
         try {
             setNightMode("no", Configuration.UI_MODE_NIGHT_NO)
             compose.onNodeWithContentDescription("Configuración").performClick()
+            compose.onNodeWithTag("settings_section:appearance").performScrollTo().performClick()
             compose.onNodeWithText("Sistema").performClick()
             compose.onNodeWithText("Blanco").performClick()
-            compose.onNodeWithTag("save_settings").performClick()
+            compose.onNodeWithContentDescription("Cerrar").performClick()
             await("system appearance settings saved") { !model.state.value.settingsVisible && model.state.value.settings.theme == "system" && model.state.value.settings.background == "white" }
 
             compose.onNodeWithContentDescription("Añadir libros").performClick()
@@ -192,7 +199,7 @@ class NativeMainActivityInstrumentedTest {
             await("native reflowable text page") { model.state.value.reader?.let { it.bookId == book.id && it.reflowable && !it.loading && it.bitmap != null } == true }
             assertEquals("The light text page must use the selected white background", Color.WHITE, readerBackground())
             compose.onNodeWithContentDescription("Página siguiente").performClick()
-            await("second text page") { model.state.value.reader?.let { it.pageIndex == 1 && !it.loading && it.bitmap != null } == true }
+            awaitDisplayedPage(book.id, 1)
             val pageCount = requireNotNull(model.state.value.reader).pageCount
 
             setNightMode("yes", Configuration.UI_MODE_NIGHT_YES)
@@ -212,6 +219,16 @@ class NativeMainActivityInstrumentedTest {
             assertEquals("Returning to light mode must preserve the current page", 1, model.state.value.reader?.pageIndex)
         } finally {
             shell("cmd uimode night $originalMode")
+        }
+    }
+
+    private fun awaitDisplayedPage(bookId: String, page: Int) {
+        // The Compose test clock advances pager animations while waiting for
+        // UI idleness; sleeping on the instrumentation thread does not.
+        compose.waitForIdle()
+        await("page ${page + 1} displayed and acknowledged") {
+            model.state.value.reader?.let { it.bookId == bookId && it.pageIndex == page && !it.loading && it.bitmap != null } == true &&
+                runBlocking { repository!!.loadBook(bookId) }?.currentPage == page
         }
     }
 
@@ -347,7 +364,8 @@ class NativeMainActivityInstrumentedTest {
             if (condition()) return
             SystemClock.sleep(50)
         }
-        throw AssertionError("Timeout: $label")
+        val reader = model.state.value.reader
+        throw AssertionError("Timeout: $label; readerPage=${reader?.pageIndex}; session=${reader?.sessionId}; navigation=${reader?.navigationRequest}; loading=${reader?.loading}")
     }
 
     private fun configFingerprint(repo: LibraryRepository): String = runBlocking {

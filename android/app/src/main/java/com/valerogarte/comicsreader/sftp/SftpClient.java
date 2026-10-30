@@ -29,7 +29,7 @@ import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
+import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -60,9 +60,15 @@ public final class SftpClient {
             this.password = password;
         }
 
-        String cacheKey() {
-            return username + "@" + host + ":" + port + "#" + (password == null ? 0 : password.hashCode());
+        @Override public boolean equals(Object value) {
+            if (this == value) return true;
+            if (!(value instanceof Credentials)) return false;
+            Credentials other = (Credentials) value;
+            return port == other.port && Objects.equals(host, other.host)
+                && Objects.equals(username, other.username) && Objects.equals(password, other.password);
         }
+
+        @Override public int hashCode() { return Objects.hash(host, port, username, password); }
     }
 
     public static final class Entry {
@@ -91,8 +97,10 @@ public final class SftpClient {
     private final File knownHostsFile;
     private final int rangeTimeoutMillis;
     private final int inactivityTimeoutMillis;
-    private final Map<String, Session> sessions = new HashMap<>();
-    private final Map<String, Long> authFailureUntil = new HashMap<>();
+    // Equality compares every credential, including the password: a hash collision must never
+    // reuse a different login's authenticated session or its authentication cooldown.
+    private final Map<Credentials, Session> sessions = new HashMap<>();
+    private final Map<Credentials, Long> authFailureUntil = new HashMap<>();
 
     public SftpClient(File knownHostsFile) {
         this(knownHostsFile, 15000, 30000);
@@ -116,19 +124,39 @@ public final class SftpClient {
         throws JSchException, SftpException {
         return withChannel(credentials, (channel, guard) -> {
             String root = channel.realpath(normalizeShelfPath(rootPath));
+            guard.activity();
             String path = shelfPath(channel, root, relativePath);
-            Vector<ChannelSftp.LsEntry> rawEntries = channel.ls(literalPath(path));
+            guard.activity();
+            List<ChannelSftp.LsEntry> rawEntries = new ArrayList<>();
+            SftpException[] failure = { null };
+            // Receive progress while READDIR is being decoded. A large, active directory is
+            // allowed to outlive the inactivity timeout, just like an active download.
+            channel.ls(literalPath(path), rawEntry -> {
+                try {
+                    guard.activity();
+                    rawEntries.add(rawEntry);
+                    return ChannelSftp.LsEntrySelector.CONTINUE;
+                } catch (SftpException error) {
+                    failure[0] = error;
+                    return ChannelSftp.LsEntrySelector.BREAK;
+                }
+            });
+            if (failure[0] != null) throw failure[0];
             List<Entry> entries = new ArrayList<>();
             for (ChannelSftp.LsEntry rawEntry : rawEntries) {
+                guard.activity();
                 String name = rawEntry.getFilename();
                 if (!isShelfEntryName(name)) continue;
                 SftpATTRS attrs = rawEntry.getAttrs();
                 if (attrs.isLink()) {
                     try {
                         String target = channel.realpath(join(path, name));
+                        guard.activity();
                         if (!insideRoot(root, target)) continue;
                         attrs = channel.stat(literalPath(target));
+                        guard.activity();
                     } catch (SftpException ignored) {
+                        guard.check();
                         continue;
                     }
                 }
@@ -144,7 +172,9 @@ public final class SftpClient {
         throws JSchException, SftpException {
         return withChannel(credentials, (channel, guard) -> {
             String root = channel.realpath(normalizeShelfPath(rootPath));
+            guard.activity();
             String path = shelfPath(channel, root, relativePath);
+            guard.activity();
             long[] count = { 0 };
             ArrayDeque<String> links = new ArrayDeque<>();
             SftpException[] failure = { null };
@@ -176,8 +206,10 @@ public final class SftpClient {
                 guard.activity();
                 try {
                     String target = channel.realpath(join(path, name));
+                    guard.activity();
                     if (!insideRoot(root, target)) continue;
                     if (channel.stat(literalPath(target)).isReg()) count[0]++;
+                    guard.activity();
                 } catch (SftpException error) {
                     if (error.id != ChannelSftp.SSH_FX_NO_SUCH_FILE) throw error;
                 }
@@ -203,8 +235,11 @@ public final class SftpClient {
         throws JSchException, SftpException {
         ResolvedFile file = withChannel(credentials, (channel, guard) -> {
             String root = channel.realpath(normalizeShelfPath(rootPath));
+            guard.activity();
             String path = shelfPath(channel, root, relativePath);
+            guard.activity();
             SftpATTRS attrs = channel.stat(literalPath(path));
+            guard.activity();
             if (!attrs.isReg()) throw new IllegalArgumentException("Expected an SFTP file");
             if (attrs.getSize() < 0) throw new IllegalArgumentException("Invalid SFTP file size");
             return new ResolvedFile(channel.getSession(), path, attrs.getSize(), attrs.getMTime() * 1000L);
@@ -445,8 +480,11 @@ public final class SftpClient {
         try {
             long result = withChannel(credentials, (channel, guard) -> {
                 String root = channel.realpath(normalizeShelfPath(rootPath));
+                guard.activity();
                 String path = shelfPath(channel, root, relativePath);
+                guard.activity();
                 SftpATTRS before = channel.stat(literalPath(path));
+                guard.activity();
                 if (!before.isReg()) throw new IllegalArgumentException("Expected an SFTP file");
                 long transferred = 0;
                 try (InputStream input = channel.get(literalPath(path)); FileOutputStream output = new FileOutputStream(localFile)) {
@@ -621,6 +659,7 @@ public final class SftpClient {
         }
 
         synchronized void activity() throws SftpException {
+            if (worker.isInterrupted()) cancelled = true;
             check();
             deadline = System.nanoTime() + idleNanos;
         }
@@ -638,7 +677,7 @@ public final class SftpClient {
 
     private Session getSession(Credentials credentials) throws JSchException {
         synchronized (sessions) {
-            String key = credentials.cacheKey();
+            Credentials key = credentials;
             Session cached = sessions.get(key);
             if (cached != null && cached.isConnected()) {
                 return cached;
@@ -683,7 +722,7 @@ public final class SftpClient {
 
     private void dropSession(Credentials credentials) {
         synchronized (sessions) {
-            Session session = sessions.remove(credentials.cacheKey());
+            Session session = sessions.remove(credentials);
             if (session != null) {
                 session.disconnect();
             }

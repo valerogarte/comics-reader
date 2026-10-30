@@ -142,6 +142,20 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
     }
 
     fun cacheFolder(folder: RemoteFolder) = transaction {
+        val directories = folder.entries.filter { it.isDirectory }.mapTo(HashSet()) { it.path }
+        val removedDirectories = readableDatabase.query("remote_entries", arrayOf("path"),
+            "source_id=? AND parent_path=? AND is_directory=1", arrayOf(folder.sourceId, folder.path),
+            null, null, null).use { cursor ->
+            buildList { while (cursor.moveToNext()) cursor.getString(0).takeUnless { it in directories }?.let { add(it) } }
+        }
+        // A removed directory (or one replaced by a file) must not keep stale descendants and
+        // their thumbnails forever. Prefix comparison treats names containing '%'/'_' literally.
+        removedDirectories.forEach { path ->
+            val prefix = "$path/"
+            val args = arrayOf(folder.sourceId, path, prefix, prefix)
+            writableDatabase.delete("remote_folders", "source_id=? AND (path=? OR substr(path,1,length(?))=?)", args)
+            writableDatabase.delete("remote_entries", "source_id=? AND (parent_path=? OR substr(parent_path,1,length(?))=?)", args)
+        }
         writableDatabase.delete("remote_entries", "source_id=? AND parent_path=?", arrayOf(folder.sourceId, folder.path))
         folder.entries.forEach { cacheEntry(folder.sourceId, folder.path, it) }
         writableDatabase.insertWithOnConflict("remote_folders", null, ContentValues().apply {

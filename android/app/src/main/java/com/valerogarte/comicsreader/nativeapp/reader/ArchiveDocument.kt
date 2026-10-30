@@ -11,6 +11,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.text.Normalizer
+import java.util.Locale
 import kotlin.math.min
 
 internal data class ArchiveItem(val name: String, val size: Long)
@@ -76,6 +77,7 @@ internal class BookArchive(private val file: File? = null, private val remote: A
         var entry = Archive.readNextHeader(archive)
         var scanned = 0
         while (entry != 0L) {
+            if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
             if (++scanned > 100_000) throw IOException("Demasiadas entradas en el archivo")
             val path = ArchiveEntry.pathnameUtf8(entry) ?: ArchiveEntry.pathname(entry)?.let { String(it, Charsets.UTF_8) }
                 ?: throw IOException("Nombre de entrada no válido")
@@ -85,6 +87,7 @@ internal class BookArchive(private val file: File? = null, private val remote: A
                 val result = ByteArray(size.toInt())
                 val data = ByteBuffer.wrap(result)
                 while (data.hasRemaining()) {
+                    if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
                     val before = data.position()
                     Archive.readData(archive, data)
                     if (data.position() == before) throw IOException("Entrada incompleta")
@@ -154,11 +157,15 @@ internal fun imageBitmap(bytes: ByteArray, width: Int): Bitmap? {
 
 internal val imageExtension = Regex("\\.(jpe?g|png|gif|webp|bmp|avif|heic)$", RegexOption.IGNORE_CASE)
 
+/** AppleDouble resource forks share the image extension but contain no page image. */
+internal fun isComicImage(name: String): Boolean = imageExtension.containsMatchIn(name) &&
+    name.replace('\\', '/').split('/').none { it == "__MACOSX" || it.startsWith("._") }
+
 private val naturalOrderParts = Regex("\\d+|\\D+")
 
 internal val naturalOrder = Comparator<String> { a, b ->
-    val left = naturalOrderParts.findAll(a.lowercase()).map { it.value }.toList()
-    val right = naturalOrderParts.findAll(b.lowercase()).map { it.value }.toList()
+    val left = naturalOrderParts.findAll(a.lowercase(Locale.ROOT)).map { it.value }.toList()
+    val right = naturalOrderParts.findAll(b.lowercase(Locale.ROOT)).map { it.value }.toList()
     var comparison = 0
     for (i in 0 until min(left.size, right.size)) {
         val x = left[i]; val y = right[i]
@@ -174,28 +181,28 @@ internal val naturalOrder = Comparator<String> { a, b ->
 /** Pick an embedded cover without reading the other archive entries. */
 internal fun comicCoverIndex(archiveName: String, images: List<String>, metadataIndex: Int?): Int {
     if (metadataIndex != null && metadataIndex in images.indices) return metadataIndex
-    fun normalized(value: String) = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)
+    fun normalized(value: String) = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "")
-    val explicitCover = images.indexOfFirst { image ->
-        val stem = normalized(image.substringAfterLast('/').substringBeforeLast('.'))
-        stem.split(Regex("[^a-z0-9]+")).any { it in setOf("cover", "frontcover", "folder", "poster", "portada", "caratula") }
+    val stems = images.map { normalized(it.replace('\\', '/').substringAfterLast('/').substringBeforeLast('.')) }
+    fun words(stem: String) = Regex("[a-z]+").findAll(stem).map { it.value }.toList()
+    fun isBackCover(stem: String) = words(stem).any { it in setOf("back", "backcover", "rear", "trasera", "contraportada") }
+    val candidates = stems.indices.filterNot { isBackCover(stems[it]) }
+    // Prefer the explicitly named front cover even when back_cover sorts before it.
+    for (names in listOf(setOf("frontcover", "front", "portada", "caratula"), setOf("cover", "folder"), setOf("poster"))) {
+        candidates.firstOrNull { index -> words(stems[index]).any { it in names } }?.let { return it }
     }
-    if (explicitCover >= 0) return explicitCover
     val titleTokens = normalized(archiveName.substringAfterLast('/').substringBeforeLast('.'))
         .split(Regex("[^a-z0-9]+"))
         .filter { it.length >= 4 && it !in setOf("el", "los", "las", "the", "and", "for", "del", "una", "uno") }
         .distinct().sortedByDescending { it.length }
     return titleTokens.firstNotNullOfOrNull { token ->
-        images.indexOfFirst { image ->
-            val stem = normalized(image.substringAfterLast('/').substringBeforeLast('.'))
-            stem.contains(token)
-        }.takeIf { it >= 0 }
+        candidates.firstOrNull { stems[it].contains(token) }
     } ?: 0
 }
 
 internal class ArchiveDocument(private val archive: BookArchive) : DocumentSession {
     private val entries = archive.entries()
-    private val images = entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
+    private val images = entries.filter { isComicImage(it.name) }
         .map { it.name }.sortedWith(naturalOrder)
     init { if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes") }
     override val pageCount: Int get() = images.size

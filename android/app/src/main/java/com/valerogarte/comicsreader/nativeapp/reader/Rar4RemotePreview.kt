@@ -65,7 +65,7 @@ internal object Rar4RemotePreview {
         }
         val archivePrefix = main ?: return null
         if (!ended) return null
-        val images = entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
+        val images = entries.filter { isComicImage(it.name) }
             .sortedWith { a, b -> naturalOrder.compare(a.name, b.name) }
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
         fun read(entry: Entry, maxSize: Int): ByteArray = BookArchive(

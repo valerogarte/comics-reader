@@ -51,7 +51,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
     // Browser state is confined to the main thread; background callbacks publish through viewModelScope.
     private val browsers = mutableMapOf<String, RemoteBrowser>()
-    private var importJob: Job? = null
+    private val importLock = Mutex()
     private var initializeJob: Job? = null
     private val settingsSave = Mutex()
     private val appearanceSave = Mutex()
@@ -120,15 +120,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun importBooks(uris: List<Uri>) {
-        if (uris.isEmpty() || importJob?.isActive == true) return
-        importJob = launchOperation("Importando libros") {
+        if (uris.isEmpty()) return
+        // A second DocumentsUI result or ACTION_VIEW may arrive while the first
+        // batch is still copying. Queue it instead of silently dropping its books.
+        val selection = uris.toList()
+        launchOperation("Importando libros") { importLock.withLock {
             var imported = 0
             var duplicates = 0
             val importedIds = books.mapTo(HashSet()) { it.id }
             val failures = ArrayList<String>()
             try {
-                uris.forEachIndexed { index, uri ->
-                    mutableState.update { it.copy(operationProgress = index.toFloat() / uris.size) }
+                selection.forEachIndexed { index, uri ->
+                    mutableState.update { it.copy(operationProgress = index.toFloat() / selection.size) }
                     try {
                         val book = repository.importBook(uri)
                         if (importedIds.add(book.id)) imported++ else duplicates++
@@ -144,7 +147,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     (when (duplicates) { 0 -> ""; 1 -> ". 1 ya estaba en la biblioteca"; else -> ". $duplicates ya estaban en la biblioteca" }) +
                     (if (failures.isEmpty()) "" else ". ${failures.size} archivos no se han importado: ${failures.first()}"),
             ) }
-        }
+        } }
     }
 
     override fun onCreateShelf(name: String) {

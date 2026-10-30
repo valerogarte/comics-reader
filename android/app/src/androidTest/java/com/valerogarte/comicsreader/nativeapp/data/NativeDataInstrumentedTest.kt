@@ -230,6 +230,44 @@ class NativeDataInstrumentedTest {
         assertTrue(source.isFile)
     }
 
+    @Test fun replacingDirectoryPurgesOnlyItsCachedSubtree() = withDatabase { db ->
+        fun cache(source: String, path: String, entries: List<RemoteEntry> = emptyList()) =
+            db.cacheFolder(RemoteFolder(path, entries, 123, source))
+        cache("A", "/", listOf(RemoteEntry("series%_📚", "/series%_📚", true), RemoteEntry("seriesXX", "/seriesXX", true)))
+        cache("A", "/series%_📚", listOf(RemoteEntry("volume", "/series%_📚/volume", true)))
+        cache("A", "/series%_📚/volume", listOf(RemoteEntry("a.cbz", "/series%_📚/volume/a.cbz", false, coverPath = "old-cover")))
+        cache("A", "/seriesXX", listOf(RemoteEntry("b.cbz", "/seriesXX/b.cbz", false, coverPath = "sibling-cover")))
+        cache("B", "/series%_📚", listOf(RemoteEntry("c.cbz", "/series%_📚/c.cbz", false, coverPath = "other-source-cover")))
+        db.insertBook(BookEntry("downloaded", "Descargado", "a.cbz", "cbz", "/private/downloaded.cbz",
+            shelfName = "Conservar", sourceId = "A", remotePath = "/series%_📚/volume/a.cbz"), "download-hash")
+        // A directory can disappear or be replaced by a regular file at the same path.
+        cache("A", "/", listOf(RemoteEntry("series%_📚", "/series%_📚", false), RemoteEntry("seriesXX", "/seriesXX", true)))
+        assertNull(db.remoteFolder("A", "/series%_📚"))
+        assertNull(db.remoteFolder("A", "/series%_📚/volume"))
+        assertEquals("b.cbz", db.remoteFolder("A", "/seriesXX")?.entries?.single()?.name)
+        assertEquals("c.cbz", db.remoteFolder("B", "/series%_📚")?.entries?.single()?.name)
+        assertEquals(setOf("sibling-cover", "other-source-cover"), db.remoteCoverPaths())
+        assertEquals("Conservar", db.book("downloaded")?.shelfName)
+    }
+
+    @Test fun explicitSyncRebuildsOldPreviewVersionsAndMissingThumbnails() = runBlocking {
+        val (repository, a, _) = fixture()
+        val first = repository.loadRemoteFolder(a.profileId, remotePath)
+        withDatabase { db -> db.cacheFolder(first.copy(entries = first.entries.map {
+            it.copy(title = "Portada anterior", previewVersion = 0)
+        })) }
+        // Cached visits remain offline and only an explicit synchronization runs the new extractor.
+        assertTrue(repository.loadRemoteFolder(a.profileId, remotePath).entries.all { it.title == "Portada anterior" })
+        val refreshed = repository.loadRemoteFolder(a.profileId, remotePath, refresh = true)
+        assertTrue(refreshed.entries.all { it.title.startsWith("qaA-v1") && it.previewVersion > 0 })
+        val missingCover = File(requireNotNull(refreshed.entries.first().coverPath))
+        assertTrue(missingCover.delete())
+        val recovered = repository.loadRemoteFolder(a.profileId, remotePath, refresh = true)
+        assertTrue(recovered.entries.all { it.coverPath?.let { path -> File(path).isFile } == true })
+        assertTrue(File(context.filesDir, "native-library/books").listFiles().orEmpty().isEmpty())
+        assertEquals(0, control("stats").getJSONObject("qaA").getInt("writes"))
+    }
+
     @Test fun realSftpBrowsingCachesOnlyPreviewsAndSyncReplacesCoverWithoutLeaks() = runBlocking {
         val (repository, a, _) = fixture()
         val first = repository.loadRemoteFolder(a.profileId, remotePath)

@@ -23,7 +23,7 @@ internal class OfficeTextDocument(file: File, options: DocumentOptions = Documen
 
     private fun xml(path: String): XmlNode = XmlContent.parse(archive.read(path, 4 * 1024 * 1024))
     private fun word(): String = xml("word/document.xml").descendants("p")
-        .joinToString("\n\n") { paragraph -> paragraph.descendants("t").joinToString("") { it.allText() } }
+        .joinToString("\n\n") { paragraph -> paragraph.descendants("t").joinToString("") { it.allText(trim = false) } }
 
     private fun spreadsheet(): String {
         val shared = if ("xl/sharedStrings.xml" in entries) xml("xl/sharedStrings.xml").descendants("si").map { it.allText() } else emptyList()
@@ -44,7 +44,7 @@ internal class OfficeTextDocument(file: File, options: DocumentOptions = Documen
                 val cells = row.descendants("c").map { cell ->
                     val value = cell.first("v")?.allText().orEmpty()
                     when (cell.attr("t")) {
-                        "inlineStr" -> cell.first("is")?.descendants("t")?.joinToString("") { it.allText() }.orEmpty()
+                        "inlineStr" -> cell.first("is")?.descendants("t")?.joinToString("") { it.allText(trim = false) }.orEmpty()
                         "s" -> value.toIntOrNull()?.let { shared.getOrNull(it) }.orEmpty()
                         "b" -> if (value == "1") "true" else "false"
                         else -> value.ifBlank { cell.first("f")?.allText()?.let { "=$it" }.orEmpty() }

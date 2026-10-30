@@ -26,8 +26,9 @@ internal class ReaderFixtures(private val directory: File) {
         image.recycle()
         output.toByteArray()
     }
-    fun zip(name: String, entries: Map<String, ByteArray>): File = File(directory, name).apply {
+    fun zip(name: String, entries: Map<String, ByteArray>, comment: String? = null): File = File(directory, name).apply {
         ZipOutputStream(outputStream()).use { zip ->
+            if (comment != null) zip.setComment(comment)
             entries.forEach { (path, bytes) ->
                 zip.putNextEntry(ZipEntry(path))
                 zip.write(bytes)
@@ -41,13 +42,15 @@ internal class ReaderFixtures(private val directory: File) {
     fun comic(extension: String, invalidCover: Boolean = false): File {
         val info = "<ComicInfo><Title>Comic QA</Title><Writer>QA Author</Writer><Publisher>QA Publisher</Publisher><PageCount>2</PageCount><Pages><Page Image=\"${if (invalidCover) 99 else 1}\" Type=\"FrontCover\"/></Pages></ComicInfo>".toByteArray()
         val entries = linkedMapOf("000.png" to png(Color.RED), "001.png" to png(Color.BLUE), "ComicInfo.xml" to info)
-        return when (extension) {
-            "cbt" -> tar("comic.cbt", entries)
-            "cbr" -> rar("comic.cbr", entries)
-            "cb7" -> sevenZip("comic.cb7", entries)
-            else -> zip("comic.$extension", entries)
-        }
+        return comicArchive("comic.$extension", entries)
     }
+
+    fun comicArchive(name: String, entries: Map<String, ByteArray>): File = when (name.substringAfterLast('.')) {
+            "cbt" -> tar(name, entries)
+            "cbr" -> rar(name, entries)
+            "cb7" -> sevenZip(name, entries)
+            else -> zip(name, entries)
+        }
 
     fun epub(): File = zip("book.epub", linkedMapOf(
         "mimetype" to "application/epub+zip".toByteArray(),

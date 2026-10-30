@@ -9,8 +9,9 @@ internal data class XmlNode(
     val name: String,
     val attributes: Map<String, String>,
     val children: MutableList<XmlNode> = ArrayList(),
-    var text: String = "",
+    val content: MutableList<Any> = ArrayList(),
 ) {
+    val text: String get() = content.filterIsInstance<String>().joinToString("")
     fun descendants(name: String): List<XmlNode> = buildList {
         if (this@XmlNode.name.equals(name, true)) add(this@XmlNode)
         for (child in children) addAll(child.descendants(name))
@@ -20,7 +21,13 @@ internal data class XmlNode(
         for (child in children) child.first(name)?.let { return it }
         return null
     }
-    fun allText(): String = (text + children.joinToString(" ") { it.allText() }).trim()
+    fun allText(trim: Boolean = true): String = buildString { appendTextTo(this) }.let { if (trim) it.trim() else it }
+    private fun appendTextTo(output: StringBuilder) {
+        for (part in content) when (part) {
+            is String -> output.append(part)
+            is XmlNode -> part.appendTextTo(output)
+        }
+    }
     fun attr(name: String): String = attributes.entries.firstOrNull { it.key.equals(name, true) }?.value.orEmpty()
 }
 
@@ -43,9 +50,10 @@ internal object XmlContent {
                     val attributes = (0 until parser.attributeCount).associate { parser.getAttributeName(it) to parser.getAttributeValue(it) }
                     val node = XmlNode(parser.name.substringAfter(':'), attributes)
                     stack.last().children += node
+                    stack.last().content += node
                     stack += node
                 }
-                XmlPullParser.TEXT, XmlPullParser.CDSECT -> stack.last().text += parser.text.orEmpty()
+                XmlPullParser.TEXT, XmlPullParser.CDSECT -> stack.last().content += parser.text.orEmpty()
                 XmlPullParser.END_TAG -> if (stack.size > 1) stack.removeAt(stack.lastIndex)
             }
             parser.next()

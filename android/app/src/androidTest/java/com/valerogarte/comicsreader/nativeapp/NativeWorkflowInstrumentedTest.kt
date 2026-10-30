@@ -90,6 +90,15 @@ class NativeWorkflowInstrumentedTest {
         await("imported") { it.books.size == expectedCount && it.busyMessage == null }
         main { model.onDismissMessage() }
     }
+    private fun navigateAndDisplayPage(page: Int) {
+        main {
+            model.onReaderPage(page)
+            val reader = requireNotNull(model.state.value.reader)
+            // Pager/list acknowledgements, rather than navigation requests,
+            // establish the last page that the reader actually displayed.
+            model.onReaderPosition(reader.bookId, reader.sessionId, reader.navigationRequest, page)
+        }
+    }
     private fun control(op: String, user: String? = null, value: Boolean? = null, seconds: Double? = null): JSONObject {
         val request = JSONObject().put("op", op)
         user?.let { request.put("user", it) }; value?.let { request.put("value", it) }; seconds?.let { request.put("seconds", it) }
@@ -128,7 +137,7 @@ class NativeWorkflowInstrumentedTest {
         main { model.onOpenBook(id) }
         await("reader loaded") { it.reader?.bitmap != null && it.reader?.loading == false }
         assertEquals(3, model.state.value.reader!!.pageCount)
-        main { model.onReaderPage(2) }
+        navigateAndDisplayPage(2)
         await("last page") { it.reader?.pageIndex == 2 && it.reader?.loading == false }
         main { model.onCloseReader() }
         await("progress saved") { it.reader == null && it.books.single().progress == 1f }
@@ -177,6 +186,32 @@ class NativeWorkflowInstrumentedTest {
         assertTrue(result.message!!.contains("1 ya estaba"))
     }
 
+    @Test fun successiveImportRequestsBothReachTheLibrary() {
+        val first = pdf("queued-first.pdf", Color.RED)
+        val second = pdf("queued-second.pdf", Color.BLUE)
+        main {
+            model.importBooks(listOf(Uri.fromFile(first)))
+            model.importBooks(listOf(Uri.fromFile(second)))
+        }
+        val result = await("both queued import requests") { it.books.size == 2 && it.busyMessage == null }
+        assertNull(result.error)
+        restartModel()
+        assertEquals(2, model.state.value.books.size)
+    }
+
+    @Test fun closingBeforeNavigationSettlesKeepsTheLastDisplayedPage() {
+        importFile(pdf("unsettled-page.pdf", Color.WHITE), 1)
+        val id = model.state.value.books.single().id
+        main { model.onOpenBook(id) }
+        await("reader loaded") { it.reader?.bitmap != null && it.reader?.loading == false }
+        navigateAndDisplayPage(1)
+        main { model.onReaderPage(2); model.onCloseReader() }
+        await("displayed page persisted") { it.reader == null && it.books.single().progress in .6f.. .7f }
+        main { model.onOpenBook(id) }
+        val resumed = await("resume displayed page") { it.reader?.bitmap != null && it.reader?.loading == false }
+        assertEquals(1, resumed.reader!!.pageIndex)
+    }
+
     @Test fun parallelServersKeepSelectionCacheAndDownloadsSeparate() {
         control("reset")
         saveSettings(model.state.value.settings.copy(sftpServers = servers))
@@ -220,7 +255,7 @@ class NativeWorkflowInstrumentedTest {
         val original = await("reflow reader") { it.reader?.bitmap != null && it.reader?.loading == false }
         assertTrue(original.reader!!.reflowable)
         val originalCount = original.reader!!.pageCount
-        main { model.onReaderPage(originalCount / 2) }
+        navigateAndDisplayPage(originalCount / 2)
         await("middle page") { it.reader?.pageIndex == originalCount / 2 && it.reader?.loading == false }
         val sourceFont = listOf("NotoSerif-Regular.ttf", "Roboto-Regular.ttf", "RobotoStatic-Regular.ttf").map { File("/system/fonts", it) }.first { it.isFile }
         main { model.importFont(Uri.fromFile(sourceFont)) }

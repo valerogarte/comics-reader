@@ -21,6 +21,10 @@ public class SftpSmoke {
    List<SftpClient.Entry> entries=client.listShelf(credentials,"/library","/Comics/DC/Sandman");require(entries.size()==2,"Fixture listing failed");passed++;
    long wireBefore=transferred(command("{\"op\":\"stats\"}")); byte[] one=client.readShelfRange(credentials,"/library","/Comics/DC/Sandman/a.cbz",0,1); long wireAfter=transferred(command("{\"op\":\"stats\"}")); require(one.length==1&&wireAfter-wireBefore==1,"One-byte range overfetched on the wire");passed++;
    byte[] range=client.readShelfRange(credentials,"/library","/Comics/DC/Sandman/a.cbz",0,4);require(Arrays.equals(range,new byte[]{0x50,0x4b,3,4}),"Range bytes mismatch");passed++;
+   String collidingPassword="gJxture-password";require("fixture-password".hashCode()==collidingPassword.hashCode(),"Collision fixture is invalid");
+   SftpClient.Credentials wrongCollision=new SftpClient.Credentials("127.0.0.1",PORT,"qaA",collidingPassword);
+   boolean collisionRejected=false;try{client.listShelf(wrongCollision,"/library","/");}catch(Exception expected){collisionRejected=SftpClient.isAuthFailure(expected);}require(collisionRejected,"Password hash collision reused an authenticated session");passed++;
+   SftpClient collisionClient=new SftpClient(hosts);try{collisionRejected=false;try{collisionClient.listShelf(wrongCollision,"/library","/");}catch(Exception expected){collisionRejected=SftpClient.isAuthFailure(expected);}require(collisionRejected&&!collisionClient.listShelf(credentials,"/library","/").isEmpty(),"Password hash collision shared authentication cooldown");}finally{collisionClient.disconnectAll();}passed++;
    boolean rejected=false;try{client.readShelfRange(credentials,"/library","/../outside/secret.cbz",0,4);}catch(IllegalArgumentException expected){rejected=true;}require(rejected,"Traversal accepted");passed++;
    rejected=false;try{client.readShelfRange(credentials,"/library","/escape/secret.cbz",0,4);}catch(IllegalArgumentException expected){rejected=true;}require(rejected,"Escaping symlink read accepted");passed++;
    rejected=false;try{client.readShelfRange(credentials,"/library","/Comics/DC/Sandman/a.cbz",-1,4);}catch(IllegalArgumentException expected){rejected=true;}require(rejected,"Negative offset accepted");passed++;
@@ -40,6 +44,8 @@ public class SftpSmoke {
     command("{\"op\":\"delay\",\"user\":\"qaA\",\"operation\":\"stat\",\"seconds\":1.2}");began=System.nanoTime();rejected=false;
     try{guarded.readShelfRange(credentials,"/library","/readme.txt",0,1);}catch(Exception expected){rejected=true;}finally{command("{\"op\":\"delay\",\"user\":\"qaA\",\"operation\":\"stat\",\"seconds\":0}");}
     require(rejected&&(System.nanoTime()-began)/1000000L<1500,"STAT before range read ignored its deadline");passed++;
+    command("{\"op\":\"delay\",\"user\":\"qaA\",\"operation\":\"stat\",\"seconds\":0.08}");began=System.nanoTime();
+    try{List<SftpClient.Entry> linked=guarded.listShelf(credentials,"/library","/linked");require(linked.size()==8&&(System.nanoTime()-began)/1000000L>300,"Active symlink listing must outlive its inactivity timeout");}finally{command("{\"op\":\"delay\",\"user\":\"qaA\",\"operation\":\"stat\",\"seconds\":0}");}passed++;
    }finally{guarded.disconnectAll();}
    long beforeCancelConnections=connections(command("{\"op\":\"stats\"}"));File interrupted=new File(dir,"interrupted.part");CountDownLatch entered=new CountDownLatch(1);AtomicReference<Throwable> failure=new AtomicReference<>();
    command("{\"op\":\"delay\",\"user\":\"qaA\",\"seconds\":1.2}");

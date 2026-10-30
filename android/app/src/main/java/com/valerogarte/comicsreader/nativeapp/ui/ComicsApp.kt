@@ -483,8 +483,10 @@ private fun BookAction(downloaded: Boolean?, downloading: Boolean, onDownload: (
 
 @Composable
 internal fun CoverImage(path: String?, title: String, modifier: Modifier = Modifier) {
-    val image by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, path) {
-        value = if (path.isNullOrBlank()) null else withContext(Dispatchers.IO) {
+    // produceState retains its last result when its key changes. Associate each
+    // decoded image with its source so a new book never displays the old cover.
+    val loaded by produceState<Pair<String?, androidx.compose.ui.graphics.ImageBitmap?>>(path to null, path) {
+        value = path to if (path.isNullOrBlank()) null else withContext(Dispatchers.IO) {
             runCatching {
                 val localPath = path.removePrefix("file://")
                 if (!File(localPath).isFile) return@runCatching null
@@ -498,6 +500,7 @@ internal fun CoverImage(path: String?, title: String, modifier: Modifier = Modif
             }.getOrNull()
         }
     }
+    val image = loaded.second.takeIf { loaded.first == path }
     if (image != null) Image(image!!, null, modifier.clearAndSetSemantics {}, contentScale = ContentScale.Crop)
     else Box(modifier.clearAndSetSemantics {}.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.surfaceContainerHighest))), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(12.dp)) {

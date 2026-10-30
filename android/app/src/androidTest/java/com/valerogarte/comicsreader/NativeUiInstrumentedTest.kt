@@ -276,6 +276,59 @@ class NativeUiInstrumentedTest {
         compose.onNodeWithTag("book_grid").assertIsDisplayed()
     }
 
+    @Test fun verticalReadingScrollAndLayoutSwitchKeepTheDisplayedPage() {
+        compose.runOnIdle {
+            actions.openReader(page = 2)
+            actions.state = actions.state.copy(settings = actions.state.settings.copy(readingMode = ReaderMode.VERTICAL))
+        }
+        compose.onNodeWithTag("vertical_reader_pages").performScrollToIndex(6)
+        compose.runOnIdle { assertEquals(6, actions.state.reader!!.pageIndex) }
+        compose.onNodeWithText("7 de 10").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Opciones de lectura").performClick()
+        compose.onNodeWithText("Horizontal").performClick()
+        compose.onNodeWithText("Guardar").performClick()
+        compose.onNodeWithTag("reader_page").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(6, actions.state.reader!!.pageIndex) }
+        compose.onNodeWithContentDescription("Página siguiente").performClick()
+        compose.runOnIdle { assertEquals(7, actions.state.reader!!.pageIndex) }
+    }
+
+    @Test fun everyHorizontalTransitionConfirmsSettledPagesAndCancelsPartialSwipes() {
+        ReaderTransition.entries.forEach { effect ->
+            compose.runOnIdle {
+                actions.state = actions.state.copy(settings = actions.state.settings.copy(readerTransition = effect))
+                actions.confirmedPages.clear()
+                actions.openReader(page = 3, id = "transition:${effect.name}")
+            }
+            val pager = compose.onNodeWithTag("reader_page")
+            pager.assertIsDisplayed()
+            compose.runOnIdle { assertEquals("$effect initial settled page", 3, actions.confirmedPages.lastOrNull()) }
+
+            pager.performTouchInput { swipeLeft(durationMillis = 400) }
+            compose.runOnIdle {
+                assertEquals("$effect forward page", 4, actions.state.reader!!.pageIndex)
+                assertEquals("$effect forward acknowledgement", 4, actions.confirmedPages.lastOrNull())
+            }
+            pager.performTouchInput { swipeRight(durationMillis = 400) }
+            compose.runOnIdle {
+                assertEquals("$effect backward page", 3, actions.state.reader!!.pageIndex)
+                assertEquals("$effect backward acknowledgement", 3, actions.confirmedPages.lastOrNull())
+            }
+
+            // Interrupt below the halfway point without a release fling. Neither
+            // the visible page nor the persisted-position callback may advance.
+            pager.performTouchInput {
+                down(Offset(width * .8f, height * .5f))
+                moveTo(Offset(width * .65f, height * .5f), delayMillis = 400)
+                cancel()
+            }
+            compose.runOnIdle {
+                assertEquals("$effect cancelled swipe page", 3, actions.state.reader!!.pageIndex)
+                assertEquals("$effect cancelled swipe acknowledgement", 3, actions.confirmedPages.lastOrNull())
+            }
+        }
+    }
+
     @Test fun messagesAreVisibleAboveSettingsAndReader() {
         openSettings()
         compose.runOnIdle { actions.state = actions.state.copy(error = "Error de prueba") }
@@ -314,6 +367,7 @@ class NativeUiInstrumentedTest {
         val deletedShelves = ArrayList<String>()
         val createdShelves = ArrayList<String>()
         val pages = ArrayList<Int>()
+        val confirmedPages = ArrayList<Int>()
         var imports = 0; var fontImports = 0; var backgroundImports = 0; var syncs = 0; var downloadAll = 0
         override fun onShowSettings() { state = state.copy(settingsVisible = true) }
         override fun onCloseSettings() { state = state.copy(settingsVisible = false) }
@@ -352,6 +406,7 @@ class NativeUiInstrumentedTest {
         override fun onReaderPosition(bookId: String, sessionId: Int, navigationRequest: Long, pageIndex: Int) {
             val reader = state.reader ?: return
             if (reader.bookId != bookId || reader.sessionId != sessionId || reader.navigationRequest != navigationRequest || reader.loading) return
+            confirmedPages += pageIndex
             if (reader.pageIndex != pageIndex) {
                 pages += pageIndex
                 state = state.copy(reader = reader.copy(pageIndex = pageIndex))

@@ -1,0 +1,7 @@
+Starting: Intent { cmp=com.valerogarte.comicsreader/.MainActivity }
+Status: ok
+Activity: com.valerogarte.comicsreader/.MainActivity
+ThisTime: 932
+TotalTime: 932
+WaitTime: 941
+Complete

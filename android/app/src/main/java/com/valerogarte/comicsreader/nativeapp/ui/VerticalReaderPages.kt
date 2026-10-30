@@ -70,7 +70,9 @@ private fun VerticalReaderDocument(reader: UiReaderState, actions: AppActions, o
     val list = rememberLazyListState(initialFirstVisibleItemIndex = reader.pageIndex.coerceIn(0, pageCount - 1))
     val latestNavigationRequest by rememberUpdatedState(reader.navigationRequest)
     val currentActions by rememberUpdatedState(actions)
-    var appliedNavigationRequest by remember { mutableLongStateOf(reader.navigationRequest) }
+    // A restored list may lag a navigation request retained by the ViewModel.
+    // Do not publish its old index until the first alignment has completed.
+    var appliedNavigationRequest by remember { mutableLongStateOf(-1L) }
     var consumedZoomReset by remember { mutableIntStateOf(resetZoomRequest) }
     var zoomReset by remember { mutableStateOf<VerticalZoomReset?>(null) }
     val fallbackRatio = remember(reader.bitmap) { reader.bitmap?.pageRatio() ?: (2f / 3f) }
@@ -78,7 +80,9 @@ private fun VerticalReaderDocument(reader: UiReaderState, actions: AppActions, o
     // Position reports change pageIndex too. Only an explicit navigationRequest scrolls the list.
     LaunchedEffect(reader.navigationRequest) {
         if (appliedNavigationRequest != reader.navigationRequest) {
-            list.scrollToItem(reader.pageIndex.coerceIn(0, pageCount - 1))
+            val target = reader.pageIndex.coerceIn(0, pageCount - 1)
+            // Retain the restored within-page scroll offset when it is current.
+            if (appliedNavigationRequest != -1L || list.firstVisibleItemIndex != target) list.scrollToItem(target)
             appliedNavigationRequest = reader.navigationRequest
         }
     }

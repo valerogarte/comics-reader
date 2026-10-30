@@ -12,7 +12,7 @@ internal object RemoteBookPreview {
     /** Index ZIP comics once and fetch only ComicInfo and the selected cover. */
     fun comic(name: String, input: RemoteInput): DocumentMetadata {
         val zip = RemoteZip(input)
-        val images = zip.entries.filter { imageExtension.containsMatchIn(it.name) && !it.name.startsWith("__MACOSX/") }
+        val images = zip.entries.filter { isComicImage(it.name) }
             .sortedWith(compareBy(naturalOrder) { it.name })
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
         val info = zip.entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
@@ -98,7 +98,10 @@ internal object RemoteBookPreview {
         if (cover == null) {
             val page = zip.entries.firstOrNull { it.name.equals("word/document.xml", true) }
                 ?: zip.entries.filter { it.name.matches(Regex("ppt/slides/slide\\d+\\.xml", RegexOption.IGNORE_CASE)) }.minWithOrNull(compareBy(naturalOrder) { it.name })
-            val text = page?.let { runCatching { XmlContent.parse(zip.read(it, 2 * 1024 * 1024)).descendants("t").joinToString(" ") { node -> node.allText() } }.getOrNull() }
+            val text = page?.let { runCatching {
+                XmlContent.parse(zip.read(it, 2 * 1024 * 1024)).descendants("p")
+                    .joinToString("\n\n") { paragraph -> paragraph.descendants("t").joinToString("") { it.allText(trim = false) } }
+            }.getOrNull() }
             if (!text.isNullOrBlank()) TextDocument(text).use { cover = it.renderPage(0, 360) }
         }
         return DocumentMetadata(
@@ -136,14 +139,20 @@ internal class RemoteZip(private val input: RemoteInput) {
         if (input.size < 22) throw IOException("ZIP incompleto")
         var tailOffset = input.size - 22
         var tail = input.bytes(tailOffset, 22)
-        var eocd = 0
-        if (u32(tail, 0) != 0x06054b50L) {
-            val tailSize = minOf(65557L, (input.size / 4).coerceAtLeast(22)).toInt()
+        var eocd = if (u32(tail, 0) == 0x06054b50L && u16(tail, 20) == 0) 0 else -1
+        // A ZIP comment may use all 65535 bytes. Grow the search window only as
+        // needed; the remote transport reuses overlapping ranges and enforces its budget.
+        var tailSize = 22L
+        val maximumTail = minOf(65557L, input.size - 1)
+        while (eocd < 0 && tailSize < maximumTail) {
+            tailSize = minOf(maximumTail, maxOf(1024L, tailSize * 4))
             tailOffset = input.size - tailSize
-            tail = input.bytes(tailOffset, tailSize)
-            eocd = (tail.size - 22 downTo 0).firstOrNull { u32(tail, it) == 0x06054b50L && it + 22 + u16(tail, it + 20) == tail.size }
-                ?: throw IOException("Directorio ZIP no encontrado")
+            tail = input.bytes(tailOffset, tailSize.toInt())
+            eocd = (tail.size - 22 downTo 0).firstOrNull {
+                u32(tail, it) == 0x06054b50L && it + 22 + u16(tail, it + 20) == tail.size
+            } ?: -1
         }
+        if (eocd < 0) throw IOException("Directorio ZIP no encontrado")
         if (u16(tail, eocd + 4) != 0 || u16(tail, eocd + 6) != 0) throw IOException("ZIP dividido no compatible")
         val count = u16(tail, eocd + 10)
         val length = u32(tail, eocd + 12)
@@ -155,6 +164,7 @@ internal class RemoteZip(private val input: RemoteInput) {
         val result = ArrayList<RemoteZipEntry>()
         var position = 0
         repeat(count) {
+            if (directory.size - position < 46) throw IOException("Directorio ZIP incompleto")
             if (u32(directory, position) != 0x02014b50L) throw IOException("Directorio ZIP dañado")
             val flags = u16(directory, position + 8)
             val method = u16(directory, position + 10)
@@ -194,6 +204,7 @@ internal class RemoteZip(private val input: RemoteInput) {
                     val output = ByteArrayOutputStream(minOf(entry.size, 1024 * 1024))
                     val buffer = ByteArray(16 * 1024)
                     while (!inflater.finished()) {
+                        if (Thread.currentThread().isInterrupted) throw IOException("Lectura cancelada")
                         val count = inflater.inflate(buffer)
                         if (count == 0) throw IOException("Contenido ZIP incompleto")
                         if (output.size() + count > entry.size || output.size() + count > limit) throw IOException("Contenido ZIP demasiado grande")

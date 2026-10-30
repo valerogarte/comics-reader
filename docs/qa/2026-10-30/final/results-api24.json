@@ -1,0 +1,30 @@
+[
+  {
+    "suite": "data",
+    "api": 24,
+    "passed": true,
+    "tests": 18,
+    "log": "data-api24.txt"
+  },
+  {
+    "suite": "reader",
+    "api": 24,
+    "passed": true,
+    "tests": 42,
+    "log": "reader-api24.txt"
+  },
+  {
+    "suite": "workflow",
+    "api": 24,
+    "passed": true,
+    "tests": 10,
+    "log": "workflow-api24.txt"
+  },
+  {
+    "suite": "ui",
+    "api": 24,
+    "passed": true,
+    "tests": 18,
+    "log": "ui-api24.txt"
+  }
+]

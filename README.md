@@ -18,9 +18,13 @@ Aplicación nativa en Kotlin y Jetpack Compose. La interfaz, la lectura y el alm
 
 El catálogo remoto no guarda archivos completos. Las fichas aparecen tras listar la carpeta y las portadas y metadatos se completan progresivamente, con un máximo de tres libros procesándose a la vez entre todos los servidores. Cada libro reutiliza su canal de lectura y los CBZ/ZIP acceden directamente al índice, los metadatos y la imagen de portada.
 
+En los cómics se respeta primero la portada marcada en `ComicInfo.xml`. Cuando falta, se buscan nombres de portada habituales, después imágenes cuyo nombre coincida con el título y, como último recurso, la primera página. La búsqueda por nombre excluye contraportadas y los archivos auxiliares de macOS no se cuentan como páginas. Estas reglas no modifican el cómic: la app guarda una miniatura independiente en su caché.
+
 Las vistas previas transfieren únicamente rangos parciales, con un límite de 16 MiB por libro, y reutilizan en memoria los fragmentos ya leídos. Si una portada no se puede obtener dentro de ese límite, se conserva la ficha sin descargar el documento entero. Las carpetas guardadas siguen abriéndose desde la caché hasta que se pulsa **Sincronizar**.
 
 En los archivos CBR con RAR4 o RAR5 no sólido, cuando su estructura lo permite, se leen las cabeceras por separado y solo se extraen la portada y los metadatos necesarios. Los fallos temporales de conexión se reintentan al sincronizar; los formatos que no pueden obtenerse con la lectura parcial se conservan en caché hasta que cambie el archivo o el extractor.
+
+La sincronización explícita también renueva las portadas de extractores anteriores o desaparecidas del almacenamiento, y elimina las fichas y miniaturas de subcarpetas remotas que hayan dejado de existir. Los libros descargados conservan sus archivos y estanterías.
 
 Cada carpeta SFTP muestra, cuando se puede consultar, el número de archivos que contiene directamente, de cualquier formato, sin sumar los de sus subcarpetas. El recuento se completa en segundo plano, se guarda en caché y se actualiza con **Sincronizar**. Si el servidor no permite obtenerlo, aparece «Recuento no disponible».
 

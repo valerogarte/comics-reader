@@ -26,9 +26,9 @@ mkdir -p /tmp/comics-native-data-qa/classes
 "$QA_JDK/bin/java" -cp "/tmp/comics-native-data-qa/classes:$QA_JSCH_JAR" SftpSmoke
 ```
 
-El resultado esperado es `Native SftpClient real SSH checks passed: 18`. Comprueba listados, rangos, confinamiento de rutas y enlaces, descarga explícita, limpieza al cancelar, cambios durante la transferencia y rechazo de claves SSH distintas. También comprueba que pedir un byte transfiere un byte y que los signos de interrogación de un nombre se tratan literalmente.
+El resultado esperado es `Native SftpClient real SSH checks passed: 21`. Comprueba listados, rangos, confinamiento de rutas y enlaces, descarga explícita, limpieza al cancelar, cambios durante la transferencia y rechazo de claves SSH distintas. También comprueba que pedir un byte transfiere un byte, que los signos de interrogación de un nombre se tratan literalmente y que contraseñas con el mismo `hashCode` no comparten sesión ni bloqueo de autenticación.
 
-Las respuestas detenidas de descarga, listado y STAT tienen un plazo real por canal. La regresión inyecta 300 ms frente a respuestas demoradas 1,2 s; también verifica que una descarga con progreso puede durar más de ese plazo y que interrumpir una descarga bloqueada conserva la sesión SSH para otro canal. En producción se permiten 30 s sin progreso por canal, reiniciados tras cada bloque descargado, y 15 s totales por lectura exacta de rango.
+Las respuestas detenidas de descarga, listado y STAT tienen un plazo real por canal. La regresión inyecta 300 ms frente a respuestas demoradas 1,2 s; también verifica que una descarga y un listado con progreso pueden durar más de ese plazo y que interrumpir una descarga bloqueada conserva la sesión SSH para otro canal. En producción se permiten 30 s sin progreso por canal, reiniciados al recibir datos o completar solicitudes, y 15 s totales por lectura exacta de rango.
 
 ## Instrumentación Android
 
@@ -50,7 +50,7 @@ El ejecutor rechaza identificadores que no empiecen por `emulator-`. Para ejecut
 
 `--no-streaming` permite instalar también en las imágenes Android antiguas. El ejecutor calcula en el host la huella del APK instalado, sin depender de utilidades disponibles en el dispositivo. Conserva resultados de otras suites del mismo entorno y APK para poder repetir una suite sin mezclar versiones.
 
-La suite Data contiene **16 casos**. La cobertura y los resultados de cada ejecución se documentan en `docs/qa/2026-10-29/data-coverage.md`.
+La suite Data contiene **18 casos**. Las revisiones y sus resultados se documentan en `docs/qa/`.
 
 Ejecuta estas pruebas, `NativeWorkflowInstrumentedTest` y el smoke JVM de forma secuencial: comparten la fixture y reinician sus datos y estadísticas.
 

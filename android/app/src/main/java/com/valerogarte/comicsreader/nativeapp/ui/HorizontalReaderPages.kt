@@ -85,7 +85,10 @@ private fun HorizontalReaderDocument(
     val pager = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
     val latestNavigationRequest by rememberUpdatedState(reader.navigationRequest)
     val currentActions by rememberUpdatedState(actions)
-    var appliedNavigationRequest by remember { mutableLongStateOf(reader.navigationRequest) }
+    // PagerState restores independently of the retained ViewModel. Its saved
+    // page can precede a navigation request that arrived during recreation.
+    // Align them before accepting any viewport position as acknowledged.
+    var appliedNavigationRequest by remember { mutableLongStateOf(-1L) }
     var currentZoom by remember { mutableFloatStateOf(1f) }
 
     LaunchedEffect(reader.navigationRequest) {
@@ -93,7 +96,7 @@ private fun HorizontalReaderDocument(
         if (appliedNavigationRequest != request) {
             val target = reader.pageIndex.coerceIn(0, pageCount - 1)
             try {
-                if (effect == ReaderTransition.NONE || abs(target - pager.currentPage) > 1) {
+                if (appliedNavigationRequest == -1L || effect == ReaderTransition.NONE || abs(target - pager.currentPage) > 1) {
                     pager.scrollToPage(target)
                 } else {
                     pager.animateScrollToPage(target, animationSpec = tween(240))

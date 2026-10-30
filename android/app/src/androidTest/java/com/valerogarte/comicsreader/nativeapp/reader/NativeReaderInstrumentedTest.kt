@@ -14,6 +14,8 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.util.Locale
+import java.util.Random
 
 @RunWith(AndroidJUnit4::class)
 class NativeReaderInstrumentedTest {
@@ -86,6 +88,93 @@ class NativeReaderInstrumentedTest {
         val fallback=engine.inspectLocal(fixtures.comic("cbz",invalidCover=true))
         try { assertTrue("Invalid cover index should use first page",Color.red(fallback.cover!!.getPixel(10,10))>200) }
         finally { fallback.cover?.recycle() }
+    }
+
+    @Test fun comicCoverNamesExcludeBackCoversAndAppleResourceForks() {
+        val entries = linkedMapOf(
+            "000.png" to fixtures.png(Color.RED),
+            "back_cover.png" to fixtures.png(Color.GREEN),
+            "folder.png" to fixtures.png(Color.GREEN),
+            "z_front_cover01.PNG" to fixtures.png(Color.BLUE),
+            "__MACOSX/._000.png" to byteArrayOf(1, 2, 3),
+            "pages/._001.png" to byteArrayOf(4, 5, 6),
+            "padding.bin" to ByteArray(128 * 1024).also { Random(42).nextBytes(it) },
+        )
+        for (format in listOf("cbz", "cbr", "cbt", "cb7")) {
+            val file = fixtures.comicArchive("named-cover.$format", entries)
+            val local = engine.inspectLocal(file)
+            try {
+                assertEquals("Resource forks are not comic pages: $format", 4, local.pageCount)
+                assertTrue("Named front cover must win over back_cover and folder: $format", Color.blue(requireNotNull(local.cover).getPixel(10, 10)) > 200)
+            } finally { local.cover?.recycle() }
+            // ZIP and RAR expose individual image ranges; solid 7z/TAR may exceed the preview budget.
+            if (format in listOf("cbz", "cbr")) {
+                var transferred = 0L
+                RandomAccessFile(file, "r").use { source ->
+                    val remote = engine.inspectRemoteStrict(file.name, file.length(), RangeSource { offset, length ->
+                        transferred += length
+                        ByteArray(length).also { source.seek(offset); source.readFully(it) }
+                    })
+                    try {
+                        assertEquals(4, remote.pageCount)
+                        assertTrue("Remote front cover must match local: $format", Color.blue(requireNotNull(remote.cover).getPixel(10, 10)) > 200)
+                        assertTrue("Never download the full remote comic", transferred < file.length())
+                    } finally { remote.cover?.recycle() }
+                }
+            }
+        }
+        val locale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            assertEquals(1, comicCoverIndex("SANDMAN.cbr", listOf("001.jpg", "zSANDMAN.jpg"), null))
+            assertEquals(1, comicCoverIndex("comic.cbr", listOf("back_cover.jpg", "COVER01.JPG"), null))
+            assertEquals("ComicInfo remains authoritative", 0, comicCoverIndex("comic.cbr", listOf("back_cover.jpg", "front_cover.jpg"), 0))
+        } finally { Locale.setDefault(locale) }
+    }
+
+    @Test fun remoteZipFindsLongCommentsWithoutCompletingTheFile() {
+        val file = fixtures.zip("commented.cbz", linkedMapOf(
+            "000.png" to fixtures.png(Color.BLUE),
+            "padding.bin" to ByteArray(128 * 1024).also { Random(8).nextBytes(it) },
+        ), comment = "Comment ".repeat(7500))
+        var transferred = 0L
+        RandomAccessFile(file, "r").use { source ->
+            val remote = engine.inspectRemoteStrict(file.name, file.length(), RangeSource { offset, length ->
+                transferred += length
+                ByteArray(length).also { source.seek(offset); source.readFully(it) }
+            })
+            try {
+                assertEquals(1, remote.pageCount)
+                assertNotNull("A valid ZIP comment must not hide its cover", remote.cover)
+                assertTrue("Comment search remains partial", transferred < file.length())
+            } finally { remote.cover?.recycle() }
+        }
+    }
+
+    @Test fun remoteRangesReuseOverlapsAndRejectACompleteTransfer() {
+        var transferred = 0
+        val input = RemoteInput(512, RangeSource { offset, length ->
+            transferred += length
+            ByteArray(length) { (offset + it).toByte() }
+        })
+        assertArrayEquals(ByteArray(100) { it.toByte() }, input.bytes(0, 100))
+        assertArrayEquals(ByteArray(100) { (50 + it).toByte() }, input.bytes(50, 100))
+        assertEquals("Overlapping ranges must come from memory", 150, transferred)
+        input.span(200, 312)
+        try {
+            input.bytes(150, 50)
+            fail("Preview must never fetch every byte of a remote book")
+        } catch (_: PreviewLimitException) { }
+        assertEquals("Rejected ranges must not reach the source", 462, transferred)
+    }
+
+    @Test fun xmlMixedTextPreservesOrderAndSpacing() {
+        val xml = XmlContent.parse("<metadata><Title>The <em>Sandman</em> returns</Title><description>Hello<b> brave </b>world.</description><si><r><t>Cell </t></r><r><t>value</t></r></si></metadata>")
+        assertEquals("The Sandman returns", XmlContent.value(xml, "Title"))
+        assertEquals("Hello brave world.", XmlContent.value(xml, "description"))
+        assertEquals("Cell value", XmlContent.value(xml, "si"))
+        val runs = XmlContent.parse("<p><r><t xml:space=\"preserve\">Hello </t></r><r><t>world</t></r><r><t>!</t></r></p>")
+        assertEquals("Hello world!", runs.descendants("t").joinToString("") { it.allText(trim = false) })
     }
 
     @Test fun remotePdfAndEpubReadRangesAndNeverCompleteTheFile() {

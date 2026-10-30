@@ -1,0 +1,203 @@
+{
+  "version": "2.1.17",
+  "version_code": 20,
+  "apk_sha256": "14fe3a064acf1d4592b474196865618ddf29e00d457133e1e91d373b854b53b8",
+  "zipalign_passed": true,
+  "signature_v2_verified": true,
+  "libraries": [
+    {
+      "name": "lib/arm64-v8a/libandroidx.graphics.path.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/arm64-v8a/libarchive-jni.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/arm64-v8a/libcomics_caj.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/arm64-v8a/libcomics_djvu.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/arm64-v8a/libcomics_mobi.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/arm64-v8a/libmupdf_java.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/armeabi-v7a/libandroidx.graphics.path.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/armeabi-v7a/libarchive-jni.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/armeabi-v7a/libcomics_caj.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/armeabi-v7a/libcomics_djvu.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/armeabi-v7a/libcomics_mobi.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/armeabi-v7a/libmupdf_java.so",
+      "bits": 32,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [],
+      "elf_16k": null
+    },
+    {
+      "name": "lib/x86_64/libandroidx.graphics.path.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/x86_64/libarchive-jni.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/x86_64/libcomics_caj.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/x86_64/libcomics_djvu.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/x86_64/libcomics_mobi.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    },
+    {
+      "name": "lib/x86_64/libmupdf_java.so",
+      "bits": 64,
+      "zip_stored": true,
+      "zip_data_aligned_16k": true,
+      "elf_load_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_16k": true
+    }
+  ]
+}
