@@ -524,31 +524,51 @@ internal fun CoverImage(path: String?, title: String, modifier: Modifier = Modif
 @Composable
 private fun LibraryFooter(count: Int, filter: ReadFilter, onFilter: (ReadFilter) -> Unit, layout: LibraryLayout, onLayout: (LibraryLayout) -> Unit, coverSize: Float, onCoverSize: (Float) -> Unit) {
     Surface(tonalElevation = 2.dp) {
-        Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(pluralStringResource(R.plurals.native_total_books, count, count), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                val coverSizeLabel = stringResource(R.string.native_card_size)
-                if (layout == LibraryLayout.GRID) Slider(value = coverSize, onValueChange = onCoverSize, valueRange = 100f..210f,
-                    modifier = Modifier.width(96.dp).height(48.dp).testTag("cover_size").semantics { contentDescription = coverSizeLabel })
-                IconButton(onClick = { onLayout(LibraryLayout.GRID) }, modifier = Modifier.size(48.dp).semantics { selected = layout == LibraryLayout.GRID }) {
-                    Icon(Icons.Default.GridView, stringResource(R.string.native_grid), tint = if (layout == LibraryLayout.GRID) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = { onLayout(LibraryLayout.LIST) }, modifier = Modifier.size(48.dp).semantics { selected = layout == LibraryLayout.LIST }) {
-                    Icon(Icons.AutoMirrored.Filled.List, stringResource(R.string.native_list), tint = if (layout == LibraryLayout.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        Row(Modifier.navigationBarsPadding().fillMaxWidth().padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            FilterSelector(filter, onFilter)
+            Text(pluralStringResource(R.plurals.native_total_books, count, count), style = MaterialTheme.typography.labelLarge,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+            val coverSizeLabel = stringResource(R.string.native_card_size)
+            if (layout == LibraryLayout.GRID) Slider(value = coverSize, onValueChange = onCoverSize, valueRange = 100f..210f,
+                modifier = Modifier.width(88.dp).height(48.dp).testTag("cover_size").semantics { contentDescription = coverSizeLabel })
+            IconButton(onClick = { onLayout(LibraryLayout.GRID) }, modifier = Modifier.size(44.dp).semantics { selected = layout == LibraryLayout.GRID }) {
+                Icon(Icons.Default.GridView, stringResource(R.string.native_grid), tint = if (layout == LibraryLayout.GRID) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReadFilter.entries.forEach { item ->
-                    FilterChip(modifier = Modifier.testTag("filter:${item.name}"), selected = filter == item, onClick = { onFilter(item) }, label = { Text(stringResource(when (item) {
-                        ReadFilter.ALL -> R.string.native_all
-                        ReadFilter.UNREAD -> R.string.native_unread
-                        ReadFilter.READING -> R.string.native_reading
-                        ReadFilter.FINISHED -> R.string.native_finished
-                    })) })
-                }
+            IconButton(onClick = { onLayout(LibraryLayout.LIST) }, modifier = Modifier.size(44.dp).semantics { selected = layout == LibraryLayout.LIST }) {
+                Icon(Icons.AutoMirrored.Filled.List, stringResource(R.string.native_list), tint = if (layout == LibraryLayout.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
+}
+
+@Composable
+private fun FilterSelector(filter: ReadFilter, onFilter: (ReadFilter) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val description = stringResource(R.string.native_filter_books, stringResource(filter.label))
+    Box {
+        TextButton(onClick = { expanded = true }, contentPadding = PaddingValues(start = 8.dp, end = 4.dp),
+            modifier = Modifier.testTag("filter_selector").semantics { contentDescription = description }) {
+            Icon(Icons.Default.FilterList, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(filter.label), maxLines = 1)
+            Icon(Icons.Default.ArrowDropDown, null)
+        }
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+            ReadFilter.entries.forEach { item ->
+                DropdownMenuItem(text = { Text(stringResource(item.label)) }, onClick = { onFilter(item); expanded = false },
+                    leadingIcon = { if (item == filter) Icon(Icons.Default.Check, null) else Spacer(Modifier.size(24.dp)) },
+                    modifier = Modifier.testTag("filter:${item.name}").semantics { selected = item == filter })
+            }
+        }
+    }
+}
+
+private val ReadFilter.label get() = when (this) {
+    ReadFilter.ALL -> R.string.native_all
+    ReadFilter.UNREAD -> R.string.native_unread
+    ReadFilter.READING -> R.string.native_reading
+    ReadFilter.FINISHED -> R.string.native_finished
 }
 
 @Composable

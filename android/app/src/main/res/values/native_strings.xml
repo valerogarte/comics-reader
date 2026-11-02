@@ -59,6 +59,7 @@
     <string name="native_more">Más opciones</string>
     <string name="native_delete">Borrar</string>
     <string name="native_delete_local">Eliminar de este dispositivo</string>
+    <string name="native_filter_books">Filtrar libros: %1$s</string>
     <string name="native_mark_read">Marcar como leído</string>
     <string name="native_delete_books_message">Se eliminarán de este dispositivo los libros seleccionados y su posición de lectura. Esta acción no se puede deshacer.</string>
     <string name="native_delete_local_only">Los archivos del servidor SFTP no se tocan: podrás volver a descargarlos. Tu cronología de lectura se conserva.</string>

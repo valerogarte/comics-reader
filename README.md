@@ -5,6 +5,7 @@ Aplicación nativa en Kotlin y Jetpack Compose. La interfaz, la lectura y el alm
 ## Uso
 
 - **Libros:** importa archivos con el selector de Android. La aplicación conserva una copia privada y el progreso de lectura.
+- **Barra inferior:** en una sola línea, un selector filtra los libros (Todos, Sin leer, Leyendo o Finalizados) junto al total, el tamaño de las portadas y el cambio entre cuadrícula y lista.
 - **Estanterías:** organiza los libros descargados. Las descargas SFTP crean automáticamente la estantería con las carpetas padre relativas a la carpeta raíz configurada: raíz `/mnt/NAS/Comics` y libro `DC/Sandman/01.cbz` → `DC/Sandman`. Los archivos de la propia raíz usan el nombre del servidor. Al actualizar, se corrigen las estanterías automáticas antiguas identificables, conservando libros y progreso; se respetan las estanterías manuales o mixtas y las de servidores ya no configurados.
 - **Servidores SFTP:** añade, edita o elimina tantas conexiones como necesites desde Configuración. Cada una aparece por nombre en el menú y conserva su carpeta abierta, catálogo y descargas. Las conexiones y las descargas de servidores distintos funcionan en paralelo.
 - **Biblioteca SFTP:** abrir una carpeta guarda su catálogo, metadatos y miniaturas. Las siguientes visitas usan esa caché; **Sincronizar** vuelve a consultar la carpeta del servidor seleccionado. El botón Atrás de Android sube a la carpeta superior; desde la raíz del servidor vuelve a Libros.
