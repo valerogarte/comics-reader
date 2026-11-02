@@ -100,6 +100,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 reloadLibrary()
             }
         }
+        viewModelScope.launch {
+            try {
+                initializeJob?.join()
+                if (repository.repairMissingCovers()) reloadLibrary()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { }
+        }
     }
 
     override fun onNavigate(destination: LibraryDestination, shelfId: String?) {

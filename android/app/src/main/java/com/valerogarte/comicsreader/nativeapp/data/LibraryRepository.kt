@@ -180,6 +180,25 @@ class LibraryRepository(context: Context) : Closeable {
         }
     }
 
+    /**
+     * Comics imported while their archive could not be read have no cover or page count. Retry
+     * them with the current readers; a comic that still fails stays as it is.
+     */
+    suspend fun repairMissingCovers(): Boolean = withContext(Dispatchers.IO) {
+        mutation.withLock {
+            var repaired = false
+            database.books().filter { it.coverPath == null && it.format in comicFormats && File(it.localPath).isFile }.forEach { book ->
+                currentCoroutineContext().ensureActive()
+                val metadata = runCatching { engine.inspectLocal(privateFile(book.localPath), book.fileName) }.getOrNull() ?: return@forEach
+                val cover = metadata.cover?.let { runCatching { writeCover(File(coversDirectory, "${book.id}.jpg"), it) }.getOrNull() }
+                    ?: return@forEach
+                database.repairBook(book.id, cover, metadata.pageCount)
+                repaired = true
+            }
+            repaired
+        }
+    }
+
     suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long) = withContext(Dispatchers.IO) {
         val actualTotal = total.coerceAtLeast(0)
         database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal, readSeconds)
@@ -642,6 +661,7 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
+        private val comicFormats = setOf("cbr", "cbz", "cb7", "cbt")
         private const val REMOTE_PREVIEW_VERSION = 10
         // Version 10 only adds RAR4 covers that used to fail; covers since version 9 stay valid.
         private const val REMOTE_COVER_COMPATIBLE_VERSION = 9

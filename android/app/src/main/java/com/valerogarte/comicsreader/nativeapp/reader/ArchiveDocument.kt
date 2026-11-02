@@ -21,6 +21,8 @@ internal class BookArchive(private val file: File? = null, private val remote: A
     private fun <T> withArchive(block: (Long) -> T): T {
         val archive = Archive.readNew()
         try {
+            // Android's default locale is not UTF-8: libarchive could not convert Unicode RAR names.
+            Archive.setCharset(archive, "UTF-8".toByteArray())
             Archive.readSupportFilterAll(archive)
             Archive.readSupportFormatAll(archive)
             if (file != null) {

@@ -133,6 +133,11 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         }, "id=?", arrayOf(id))
     }
 
+    fun repairBook(id: String, coverPath: String, pageCount: Int) {
+        writableDatabase.execSQL("UPDATE books SET cover_path=?, page_count=CASE WHEN page_count>0 THEN page_count ELSE ? END WHERE id=?",
+            arrayOf<Any>(coverPath, pageCount.coerceAtLeast(0), id))
+    }
+
     fun deleteBook(id: String) { writableDatabase.delete("books", "id=?", arrayOf(id)) }
 
     /**
