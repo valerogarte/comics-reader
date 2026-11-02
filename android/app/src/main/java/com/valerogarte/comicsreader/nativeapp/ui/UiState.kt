@@ -114,6 +114,8 @@ data class AppUiState(
     val loading: Boolean = false,
     val busyMessage: String? = null,
     val operationProgress: Float? = null,
+    /** A download is running or queued and can be cancelled from the progress notice. */
+    val cancelableDownload: Boolean = false,
     val message: String? = null,
     val error: String? = null,
     val settings: UiSettings = UiSettings(),
@@ -150,6 +152,7 @@ interface AppActions {
     fun onDownloadRemote(path: String) {}
     fun onDownloadAll() {}
     fun onDownloadRemotePaths(paths: List<String>) {}
+    fun onCancelDownloads() {}
     fun onSyncRemote() {}
     fun onShowSettings() {}
     fun onCloseSettings() {}

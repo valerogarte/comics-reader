@@ -197,8 +197,11 @@ internal fun comicCoverIndex(archiveName: String, images: List<String>, metadata
         .split(Regex("[^a-z0-9]+"))
         .filter { it.length >= 4 && it !in setOf("el", "los", "las", "the", "and", "for", "del", "una", "uno") }
         .distinct().sortedByDescending { it.length }
+    // Scan groups append promotional pages named after the series («zsandman.jpg») and sort them
+    // last: a title match only counts in the first half of the book.
+    val front = candidates.filter { it < (images.size + 1) / 2 }
     return titleTokens.firstNotNullOfOrNull { token ->
-        candidates.firstOrNull { stems[it].contains(token) }
+        front.firstOrNull { stems[it].contains(token) }
     } ?: 0
 }
 

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
@@ -101,7 +100,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     val scope = rememberCoroutineScope()
     var filter by rememberSaveable { mutableStateOf(ReadFilter.ALL) }
     var layout by rememberSaveable { mutableStateOf(LibraryLayout.GRID) }
-    var coverSize by rememberSaveable { mutableFloatStateOf(136f) }
+    var coverSize by rememberSaveable { mutableFloatStateOf(100f) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var pendingDelete by remember { mutableStateOf<List<String>>(emptyList()) }
     var creatingShelf by remember { mutableStateOf(false) }
@@ -296,9 +295,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         modifier = Modifier.fillMaxSize().testTag("book_grid"), contentPadding = PaddingValues(18.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(22.dp),
                     ) {
-                        if (isRemote) items(folders, key = { "folder:${it.path}" }, span = { GridItemSpan(maxLineSpan) }) { folder ->
-                            FolderRow(folder, actions)
-                        }
+                        if (isRemote) items(folders, key = { "folder:${it.path}" }) { folder -> FolderTile(folder, actions) }
                         if (isRemote) items(remoteBooks, key = { "remote:${it.path}" }) { entry ->
                             BookTile(entry.path, entry.title, entry.format, entry.size, entry.coverPath, entry.progress,
                                 selected = entry.path in selected, downloaded = entry.downloaded, downloading = entry.downloading, queued = entry.queued,
@@ -337,11 +334,16 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                     // Not a Surface: Material surfaces consume touches, and the books below stay tappable.
                     Box(Modifier.align(Alignment.BottomCenter).padding(12.dp).widthIn(max = 560.dp).fillMaxWidth()
                         .shadow(6.dp, RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(14.dp))) {
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                            Text(state.busyMessage ?: stringResource(R.string.native_loading), style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                            Spacer(Modifier.height(8.dp))
-                            if (state.operationProgress != null) LinearProgressIndicator(progress = { state.operationProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                            else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                                Text(state.busyMessage ?: stringResource(R.string.native_loading), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                                Spacer(Modifier.height(8.dp))
+                                if (state.operationProgress != null) LinearProgressIndicator(progress = { state.operationProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                                else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            }
+                            if (state.cancelableDownload) TextButton(onClick = actions::onCancelDownloads, modifier = Modifier.padding(start = 8.dp).testTag("cancel_downloads")) {
+                                Text(stringResource(R.string.native_cancel))
+                            }
                         }
                     }
                 }
@@ -431,7 +433,7 @@ private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
     Surface(Modifier.fillMaxWidth().clickable { actions.onOpenRemoteFolder(folder.path) }, color = MaterialTheme.colorScheme.surfaceContainerLow, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (folder.folderCovers.isEmpty()) Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), tint = MaterialTheme.colorScheme.primary)
-            else FolderCovers(folder.folderCovers, folder.name)
+            else FolderCovers(folder.folderCovers, folder.name, Modifier.size(width = 118.dp, height = 96.dp))
             Column(Modifier.padding(start = 14.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(folder.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val count = folder.fileCount
@@ -447,29 +449,50 @@ private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
     }
 }
 
-/** A folder drawing with the covers of the first books inside sticking out of it. */
+/** A folder drawing with the covers of the first books inside sticking out of it; it scales to its box. */
 @Composable
-private fun FolderCovers(covers: List<String>, name: String) {
+private fun FolderCovers(covers: List<String>, name: String, modifier: Modifier = Modifier) {
     val front = MaterialTheme.colorScheme.primary
     val back = lerp(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.surface, .5f)
-    val pocket = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-    Box(Modifier.size(width = 118.dp, height = 96.dp).semantics(mergeDescendants = true) {}) {
-        Box(Modifier.offset(x = 8.dp, y = 6.dp).size(width = 42.dp, height = 16.dp).background(back, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
-        Box(Modifier.padding(top = 16.dp).fillMaxSize().background(back, RoundedCornerShape(8.dp)))
+    BoxWithConstraints(modifier.semantics(mergeDescendants = true) {}) {
+        val width = maxWidth
+        val height = maxHeight
+        val corner = width * .07f
+        val pocketHeight = height * .26f
+        val pocket = RoundedCornerShape(topStart = corner / 2, topEnd = corner / 2, bottomStart = corner, bottomEnd = corner)
+        Box(Modifier.offset(x = width * .07f, y = height * .05f).size(width = width * .36f, height = height * .14f)
+            .background(back, RoundedCornerShape(topStart = corner * .8f, topEnd = corner * .8f)))
+        Box(Modifier.padding(top = height * .14f).fillMaxSize().background(back, RoundedCornerShape(corner)))
+        val coverHeight = minOf(width * .75f, height * .78f)
         val center = (covers.size - 1) / 2f
         // Outer covers first, so the middle one lies on top as in a fanned stack.
         covers.withIndex().sortedByDescending { kotlin.math.abs(it.index - center) }.forEach { (index, path) ->
             val shift = index - center
             CoverImage(path, name, Modifier.align(Alignment.BottomCenter)
-                .offset(x = (shift * 26).dp, y = (-14).dp)
-                .graphicsLayer { rotationZ = shift * 9f; transformOrigin = TransformOrigin(.5f, 1f) }
-                .size(width = 50.dp, height = 75.dp)
+                .offset(x = width * .19f * shift, y = -pocketHeight * .55f)
+                .graphicsLayer { rotationZ = shift * 8f; transformOrigin = TransformOrigin(.5f, 1f) }
+                .size(width = coverHeight / 1.5f, height = coverHeight)
                 .shadow(3.dp, RoundedCornerShape(3.dp))
                 .clip(RoundedCornerShape(3.dp)))
         }
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(26.dp).shadow(4.dp, pocket).background(front, pocket))
-        Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 5.dp).size(16.dp),
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(pocketHeight).shadow(4.dp, pocket).background(front, pocket))
+        Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder),
+            Modifier.align(Alignment.BottomStart).padding(start = width * .07f, bottom = pocketHeight * .2f).size(pocketHeight * .6f),
             tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = .7f))
+    }
+}
+
+/** A folder in the grid, sized like a book, with the same name and details layout. */
+@Composable
+private fun FolderTile(folder: UiRemoteEntry, actions: AppActions) {
+    Column(Modifier.fillMaxWidth().testTag("folder:${folder.path}").clickable { actions.onOpenRemoteFolder(folder.path) }) {
+        FolderCovers(folder.folderCovers, folder.name, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+        Text(folder.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        val count = folder.fileCount
+        Text(if (count != null) pluralStringResource(R.plurals.native_folder_files, count, count) else stringResource(R.string.native_file_count_unavailable),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

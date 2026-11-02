@@ -200,6 +200,29 @@ class LibraryRepository(context: Context) : Closeable {
         }
     }
 
+    /**
+     * Renews the covers of downloaded comics once per cover rule, so a corrected choice also
+     * reaches books downloaded before it. Each book is handled alone and never blocks the library.
+     */
+    suspend fun refreshComicCovers(): Boolean = withContext(Dispatchers.IO) {
+        val maintenance = appContext.getSharedPreferences("native-library-maintenance", 0)
+        if (maintenance.getInt("comicCoverRule", 0) >= LOCAL_COVER_RULE) return@withContext false
+        var changed = false
+        for (book in database.books().filter { it.format in comicFormats && File(it.localPath).isFile }) {
+            currentCoroutineContext().ensureActive()
+            val cover = runCatching { engine.inspectLocal(privateFile(book.localPath), book.fileName).cover }.getOrNull() ?: continue
+            mutation.withLock {
+                val current = database.book(book.id) ?: run { cover.recycle(); return@withLock }
+                val path = runCatching { writeCover(File(coversDirectory, "${UUID.randomUUID()}.jpg"), cover) }.getOrNull() ?: return@withLock
+                database.repairBook(book.id, path, 0)
+                current.coverPath?.let { old -> runCatching { privateFile(old).delete() } }
+                changed = true
+            }
+        }
+        check(maintenance.edit().putInt("comicCoverRule", LOCAL_COVER_RULE).commit())
+        changed
+    }
+
     suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long = 0) = withContext(Dispatchers.IO) {
         val actualTotal = total.coerceAtLeast(0)
         database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal, readSeconds)
@@ -715,9 +738,11 @@ class LibraryRepository(context: Context) : Closeable {
         private const val PREVIEW_WORKERS = 3
         private const val FOLDER_COVERS = 3
         private val comicFormats = setOf("cbr", "cbz", "cb7", "cbt")
-        private const val REMOTE_PREVIEW_VERSION = 10
-        // Version 10 only adds RAR4 covers that used to fail; covers since version 9 stay valid.
-        private const val REMOTE_COVER_COMPATIBLE_VERSION = 9
+        private const val REMOTE_PREVIEW_VERSION = 11
+        // Version 11 stops choosing promotional pages named after the series: renew every cover.
+        private const val REMOTE_COVER_COMPATIBLE_VERSION = 11
+        /** Bump when the comic cover choice changes, to renew covers of downloaded comics once. */
+        private const val LOCAL_COVER_RULE = 1
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")

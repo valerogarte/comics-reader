@@ -106,6 +106,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 initializeJob?.join()
                 if (repository.repairMissingCovers()) reloadLibrary()
+                if (repository.refreshComicCovers()) reloadLibrary()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { }
         }
@@ -312,6 +313,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             }
             publishRemote(serverId)
         } else startDownloadQueue(serverId, browser)
+    }
+
+    /** Stops the download on screen (or every download) and empties its queue; partial files are removed. */
+    override fun onCancelDownloads() {
+        val shown = currentBrowser()?.takeIf { it.transferJob?.isActive == true }
+        val targets = shown?.let(::listOf) ?: browsers.values.filter { it.transferJob?.isActive == true }
+        targets.forEach { browser ->
+            browser.queue.clear()
+            browser.transferJob?.cancel()
+        }
     }
 
     private fun downloadMessage(browser: RemoteBrowser, name: String) =
@@ -886,6 +897,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
         mutableState.update { it.copy(
             busyMessage = operationMessages.lastEntry()?.value ?: backgroundMessage,
+            cancelableDownload = operationMessages.isEmpty() && transfers.isNotEmpty(),
             operationProgress = if (operationMessages.isNotEmpty()) it.operationProgress else if (transfers.size <= 1 || selected?.transferMessage != null) transfer?.transferProgress else null,
         ) }
     }
