@@ -1,14 +1,20 @@
 package com.valerogarte.comicsreader.nativeapp.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +35,12 @@ import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ReadingStatisticsScreen(statistics: UiReadingStatistics, onClose: () -> Unit) {
+internal fun ReadingStatisticsScreen(statistics: UiReadingStatistics, onClose: () -> Unit, onOpenEntry: (String) -> Unit = {}) {
+    var chronologyVisible by remember { mutableStateOf(false) }
+    if (chronologyVisible) {
+        ChronologyScreen(statistics.timeline, onBack = { chronologyVisible = false }, onOpenEntry = onOpenEntry)
+        return
+    }
     val locale = LocalConfiguration.current.locales[0]
     val numbers = remember(locale) { NumberFormat.getIntegerInstance(locale) }
     val percentages = remember(locale) { NumberFormat.getPercentInstance(locale).apply { maximumFractionDigits = 0 } }
@@ -102,14 +113,23 @@ internal fun ReadingStatisticsScreen(statistics: UiReadingStatistics, onClose: (
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         HorizontalDivider()
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            StatisticsHeading(stringResource(R.string.native_statistics_timeline))
-                            if (statistics.timeline.isEmpty()) {
-                                Text(stringResource(R.string.native_statistics_timeline_empty), style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // The chronology has its own page: a long history no longer buries the statistics.
+                        ElevatedCard(Modifier.fillMaxWidth().clickable { chronologyVisible = true }) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.History, null, tint = MaterialTheme.colorScheme.primary)
+                                Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+                                    Text(stringResource(R.string.native_statistics_timeline), style = MaterialTheme.typography.titleMedium)
+                                    Text(pluralStringResource(R.plurals.native_chronology_count, statistics.timeline.size, statistics.timeline.size),
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Box(Modifier.width(96.dp).height(54.dp)) {
+                                    statistics.timeline.take(3).reversed().forEachIndexed { index, entry ->
+                                        CoverImage(entry.coverPath, entry.title, Modifier.align(Alignment.CenterEnd).offset(x = (-index * 22).dp)
+                                            .size(width = 36.dp, height = 54.dp).clip(RoundedCornerShape(4.dp)))
+                                    }
+                                }
+                                Icon(Icons.Default.ChevronRight, null)
                             }
-                            val dates = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale) }
-                            statistics.timeline.forEach { entry -> TimelineRow(entry, dates) }
                         }
                     }
                 }
@@ -128,9 +148,43 @@ private fun StatisticCard(label: String, value: String, modifier: Modifier = Mod
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimelineRow(entry: UiReadingTimelineEntry, dates: DateFormat) {
-    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(14.dp),
+private fun ChronologyScreen(timeline: List<UiReadingTimelineEntry>, onBack: () -> Unit, onOpenEntry: (String) -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
+    val dates = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale) }
+    val months = remember(locale) { java.text.SimpleDateFormat("LLLL yyyy", locale) }
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize()) {
+            Scaffold(topBar = {
+                TopAppBar(title = { Text(stringResource(R.string.native_statistics_timeline)) },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_close)) } })
+            }) { insets ->
+                if (timeline.isEmpty()) Text(stringResource(R.string.native_statistics_timeline_empty), Modifier.padding(insets).padding(24.dp),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else LazyColumn(Modifier.fillMaxSize().padding(insets), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val groups = timeline.groupBy { months.format(Date(it.finishedAt ?: it.startedAt)).replaceFirstChar { c -> c.titlecase(locale) } }
+                    groups.forEach { (month, entries) ->
+                        item(key = "month:$month") {
+                            Text(month, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 14.dp, bottom = 2.dp).semantics { heading() })
+                        }
+                        items(entries, key = { "entry:${it.bookId}" }) { entry ->
+                            TimelineRow(entry, dates, onClick = { onOpenEntry(entry.bookId) }.takeIf { entry.canOpen })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineRow(entry: UiReadingTimelineEntry, dates: DateFormat, onClick: (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(6.dp).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically) {
         CoverImage(entry.coverPath, entry.title, Modifier.size(width = 44.dp, height = 66.dp).clip(RoundedCornerShape(4.dp)))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -149,6 +203,8 @@ private fun TimelineRow(entry: UiReadingTimelineEntry, dates: DateFormat) {
             )
             Text(details.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        if (onClick != null && !entry.local) Icon(Icons.Default.CloudDownload, stringResource(R.string.native_reopen_from_server),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

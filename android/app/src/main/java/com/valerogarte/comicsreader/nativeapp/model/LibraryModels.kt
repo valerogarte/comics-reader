@@ -37,7 +37,24 @@ data class ReadingLogEntry(
     val startedAt: Long?,
     val finishedAt: Long?,
     val lastReadAt: Long,
+    /** A private copy that outlives the book and any cache rebuild. */
+    val coverPath: String? = null,
+    /** Where the book came from, so it can be opened again after cleaning the local copy. */
+    val sourceId: String? = null,
+    val remotePath: String? = null,
 )
+
+/** A shelf is a folder of an SFTP server; offline it shows the downloaded books under that folder. */
+data class ShelfPath(
+    val id: String,
+    val name: String,
+    val profileId: String,
+    val sourceId: String,
+    val path: String,
+)
+
+/** A reading guide as stored: its JSON is the source of truth, so import and export are lossless. */
+data class StoredGuide(val id: String, val title: String, val json: String, val updatedAt: Long)
 
 data class SftpConfig(
     val host: String,

@@ -12,9 +12,11 @@ import com.valerogarte.comicsreader.nativeapp.model.ReadingStatus
 import com.valerogarte.comicsreader.nativeapp.model.RemoteEntry
 import com.valerogarte.comicsreader.nativeapp.model.RemoteFolder
 import com.valerogarte.comicsreader.nativeapp.model.ShelfEntry
+import com.valerogarte.comicsreader.nativeapp.model.ShelfPath
+import com.valerogarte.comicsreader.nativeapp.model.StoredGuide
 
 /** The native library has its own database; it never opens or migrates browser storage. */
-internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 4) {
+internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 5) {
     init { setWriteAheadLoggingEnabled(true) }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -47,10 +49,11 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             PRIMARY KEY(source_id,path))""")
         db.execSQL("CREATE INDEX remote_parent ON remote_entries(source_id,parent_path)")
         createReadingLog(db)
+        upgradeToV5(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion in 1..3 && newVersion == 4) { "Unsupported native library database version" }
+        check(oldVersion in 1..4 && newVersion == 5) { "Unsupported native library database version" }
         // Nullable/defaulted additions preserve every book, shelf, cached entry and thumbnail.
         if (oldVersion < 2) db.execSQL("ALTER TABLE remote_entries ADD COLUMN file_count INTEGER")
         if (oldVersion < 3) db.execSQL("ALTER TABLE remote_entries ADD COLUMN preview_version INTEGER NOT NULL DEFAULT 0")
@@ -59,6 +62,20 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             // Opening a book used to mark it as being read; a book still on its first page was only opened.
             db.execSQL("UPDATE books SET reading_status='UNREAD' WHERE reading_status='READING' AND current_page=0")
         }
+        if (oldVersion < 5) upgradeToV5(db)
+    }
+
+    /** Chronology covers and origins, shelves as server folders, and reading guides. */
+    private fun upgradeToV5(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE reading_log ADD COLUMN cover_path TEXT")
+        db.execSQL("ALTER TABLE reading_log ADD COLUMN source_id TEXT")
+        db.execSQL("ALTER TABLE reading_log ADD COLUMN remote_path TEXT")
+        db.execSQL("""CREATE TABLE shelf_paths(
+            id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, profile_id TEXT NOT NULL,
+            source_id TEXT NOT NULL, path TEXT NOT NULL, created_at INTEGER NOT NULL,
+            UNIQUE(profile_id,path))""")
+        db.execSQL("""CREATE TABLE reading_guides(
+            id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, json TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
     }
 
     /**
@@ -164,7 +181,8 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         }, "id=?", arrayOf(id))
         val started = log?.startedAt ?: now.takeIf { earned >= ReadingStatus.READING }
         writeReadingLog(ReadingLogEntry(id, book.title, seconds, furthest, total, started,
-            log?.finishedAt ?: now.takeIf { earned == ReadingStatus.FINISHED }, now))
+            log?.finishedAt ?: now.takeIf { earned == ReadingStatus.FINISHED }, now,
+            log?.coverPath, log?.sourceId ?: book.sourceId, log?.remotePath ?: book.remotePath))
     }
 
     /** An explicit choice: it records the finish even without the reading time. */
@@ -178,8 +196,93 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         }, "id=?", arrayOf(id))
         val log = readingLog(id)
         writeReadingLog(ReadingLogEntry(id, book.title, log?.seconds ?: 0L, last, book.pageCount,
-            log?.startedAt ?: now, log?.finishedAt ?: now, now))
+            log?.startedAt ?: now, log?.finishedAt ?: now, now,
+            log?.coverPath, log?.sourceId ?: book.sourceId, log?.remotePath ?: book.remotePath))
     }
+
+    /** Undoes "read": the book is unread again; a finish without real reading leaves the chronology. */
+    fun markUnread(id: String) = transaction {
+        val book = book(id) ?: return@transaction
+        writableDatabase.update("books", ContentValues().apply {
+            put("reading_status", ReadingStatus.UNREAD.name)
+            put("current_page", 0)
+        }, "id=?", arrayOf(id))
+        val log = readingLog(id) ?: return@transaction
+        if (log.seconds < READING_SECONDS) writableDatabase.delete("reading_log", "book_id=?", arrayOf(book.id))
+        else writeReadingLog(log.copy(finishedAt = null, furthestPage = 0))
+    }
+
+    fun readingLogEntry(id: String): ReadingLogEntry? = readingLog(id)
+
+    /**
+     * A book downloaded again takes over the chronology of the same server file: one entry per
+     * book, and the read state it already had.
+     */
+    fun adoptReadingLog(bookId: String, sourceId: String, path: String) = transaction {
+        if (readingLog(bookId) != null) return@transaction
+        val log = readableDatabase.rawQuery("SELECT * FROM reading_log WHERE source_id=? AND remote_path=? ORDER BY last_read_at DESC LIMIT 1",
+            arrayOf(sourceId, path)).use { if (it.moveToFirst()) it.readingLogEntry() else null } ?: return@transaction
+        writableDatabase.update("reading_log", ContentValues().apply { put("book_id", bookId) }, "book_id=?", arrayOf(log.bookId))
+        val book = book(bookId) ?: return@transaction
+        when {
+            log.finishedAt != null -> writableDatabase.update("books", ContentValues().apply {
+                put("reading_status", ReadingStatus.FINISHED.name); put("current_page", (book.pageCount - 1).coerceAtLeast(0))
+            }, "id=?", arrayOf(bookId))
+            log.startedAt != null && log.furthestPage > 0 -> writableDatabase.update("books", ContentValues().apply {
+                put("reading_status", ReadingStatus.READING.name); put("current_page", log.furthestPage)
+            }, "id=?", arrayOf(bookId))
+        }
+    }
+
+    fun allReadingLog(): List<ReadingLogEntry> = readableDatabase.rawQuery("SELECT * FROM reading_log", null)
+        .use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.readingLogEntry()) } }
+
+    fun updateLogOrigin(id: String, coverPath: String?, sourceId: String?, remotePath: String?) {
+        writableDatabase.update("reading_log", ContentValues().apply {
+            put("cover_path", coverPath); put("source_id", sourceId); put("remote_path", remotePath)
+        }, "book_id=?", arrayOf(id))
+    }
+
+    fun shelfPaths(): List<ShelfPath> = readableDatabase.rawQuery(
+        "SELECT * FROM shelf_paths ORDER BY name COLLATE NOCASE", null,
+    ).use { cursor -> buildList { while (cursor.moveToNext()) add(ShelfPath(cursor.string("id"), cursor.string("name"),
+        cursor.string("profile_id"), cursor.string("source_id"), cursor.string("path"))) } }
+
+    fun addShelfPath(shelf: ShelfPath) {
+        writableDatabase.insertWithOnConflict("shelf_paths", null, ContentValues().apply {
+            put("id", shelf.id); put("name", shelf.name); put("profile_id", shelf.profileId)
+            put("source_id", shelf.sourceId); put("path", shelf.path); put("created_at", System.currentTimeMillis())
+        }, SQLiteDatabase.CONFLICT_IGNORE)
+    }
+
+    fun deleteShelfPath(id: String) { writableDatabase.delete("shelf_paths", "id=?", arrayOf(id)) }
+
+    fun guides(): List<StoredGuide> = readableDatabase.rawQuery(
+        "SELECT * FROM reading_guides ORDER BY title COLLATE NOCASE", null,
+    ).use { cursor -> buildList { while (cursor.moveToNext()) add(StoredGuide(cursor.string("id"), cursor.string("title"),
+        cursor.string("json"), cursor.long("updated_at"))) } }
+
+    fun saveGuide(guide: StoredGuide) {
+        writableDatabase.insertWithOnConflict("reading_guides", null, ContentValues().apply {
+            put("id", guide.id); put("title", guide.title); put("json", guide.json); put("updated_at", guide.updatedAt)
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun deleteGuide(id: String) { writableDatabase.delete("reading_guides", "id=?", arrayOf(id)) }
+
+    /** Catalog files with this title, to find where a cleaned book of the chronology came from. */
+    fun remoteFilesByTitle(title: String): List<RemoteEntry> = readableDatabase.rawQuery("""SELECT r.*,NULL AS downloaded_book_id
+            FROM remote_entries r WHERE r.is_directory=0 AND r.title=?""", arrayOf(title)).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(cursor.remoteEntry()) }
+    }
+
+    fun isFolderCached(sourceId: String, path: String): Boolean = readableDatabase.rawQuery(
+        "SELECT 1 FROM remote_folders WHERE source_id=? AND path=? LIMIT 1", arrayOf(sourceId, path)).use { it.moveToFirst() }
+
+    /** A cached catalog entry, for guides and the chronology that know only its path. */
+    fun remoteEntry(sourceId: String, path: String): RemoteEntry? = readableDatabase.rawQuery("""SELECT r.*,b.id AS downloaded_book_id
+            FROM remote_entries r LEFT JOIN books b ON b.source_id=r.source_id AND b.remote_path=r.path
+            WHERE r.source_id=? AND r.path=? LIMIT 1""", arrayOf(sourceId, path)).use { if (it.moveToFirst()) it.remoteEntry() else null }
 
     fun readingLog(): List<ReadingLogEntry> = readableDatabase.rawQuery(
         "SELECT * FROM reading_log WHERE started_at IS NOT NULL ORDER BY COALESCE(finished_at,started_at) DESC", null,
@@ -194,6 +297,7 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             put("book_id", entry.bookId); put("title", entry.title); put("seconds", entry.seconds)
             put("furthest_page", entry.furthestPage); put("page_count", entry.pageCount)
             put("started_at", entry.startedAt); put("finished_at", entry.finishedAt); put("last_read_at", entry.lastReadAt)
+            put("cover_path", entry.coverPath); put("source_id", entry.sourceId); put("remote_path", entry.remotePath)
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
@@ -296,6 +400,7 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         bookId = string("book_id"), title = string("title"), seconds = long("seconds"),
         furthestPage = int("furthest_page"), pageCount = int("page_count"),
         startedAt = optionalLong("started_at"), finishedAt = optionalLong("finished_at"), lastReadAt = long("last_read_at"),
+        coverPath = optional("cover_path"), sourceId = optional("source_id"), remotePath = optional("remote_path"),
     )
 
     private fun Cursor.remoteEntry() = RemoteEntry(

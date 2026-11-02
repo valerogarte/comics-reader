@@ -13,7 +13,6 @@
     <string name="native_transition_page_turn">Pasar página</string>
     <string name="native_transition_reveal">Revelar</string>
     <string name="native_transition_zoom">Zoom suave</string>
-    <string name="native_retry">Reintentar</string>
     <string name="native_books">Libros</string>
     <string name="native_sftp_library">Biblioteca SFTP</string>
     <string name="native_shelves">Estanterías</string>
@@ -58,7 +57,7 @@
     <string name="native_loading">Cargando biblioteca…</string>
     <string name="native_more">Más opciones</string>
     <string name="native_delete">Borrar</string>
-    <string name="native_delete_local">Eliminar de este dispositivo</string>
+    <string name="native_delete_local">Limpiar del dispositivo</string>
     <string name="native_ai">Inteligencia artificial</string>
     <string name="native_settings_ai_summary">Proveedor y modelo</string>
     <string name="native_ai_hint">Elige el proveedor de inteligencia artificial y el modelo que usará la aplicación. De momento solo se guarda la elección.</string>
@@ -76,7 +75,7 @@
     <string name="native_filter_books">Filtrar libros: %1$s</string>
     <string name="native_mark_read">Marcar como leído</string>
     <string name="native_delete_books_message">Se eliminarán de este dispositivo los libros seleccionados y su posición de lectura. Esta acción no se puede deshacer.</string>
-    <string name="native_delete_local_only">Los archivos del servidor SFTP no se tocan: podrás volver a descargarlos. Tu cronología de lectura se conserva.</string>
+    <string name="native_delete_local_only">Los archivos del servidor SFTP no se tocan: podrás volver a descargarlos. Tu cronología de lectura se conserva, con la portada de cada libro leído.</string>
     <string name="native_cancel">Cancelar</string>
     <plurals name="native_selected">
         <item quantity="one">%1$d seleccionado</item>
@@ -174,5 +173,41 @@
     <plurals name="native_statistics_known_pages_books">
         <item quantity="one">Páginas registradas en %1$s de %2$s libro.</item>
         <item quantity="other">Páginas registradas en %1$s de %2$s libros.</item>
+    </plurals>
+    <string name="native_clean">Limpiar</string>
+    <string name="native_mark_unread">Desmarcar como leído</string>
+    <string name="native_reading_guides">Guías de lectura</string>
+    <string name="native_import_guide">Importar guía (JSON)</string>
+    <string name="native_export_guide">Exportar guía</string>
+    <string name="native_delete_guide">Eliminar guía</string>
+    <string name="native_delete_guide_message">La guía desaparece de la app. Tus cómics y tu progreso de lectura no se tocan.</string>
+    <string name="native_guides_empty_hint">Importa un JSON con un orden de lectura.</string>
+    <string name="native_shelves_empty_hint">Abre una carpeta del servidor y pulsa «Añadir a estanterías».</string>
+    <string name="native_remove_shelf">Quitar estantería</string>
+    <string name="native_remove_shelf_message">«%1$s» dejará de aparecer en Estanterías. No se borra ningún archivo.</string>
+    <string name="native_remove">Quitar</string>
+    <string name="native_shelf_offline">Sin conexión con el servidor: se muestran los libros descargados de %1$s</string>
+    <string name="native_retry">Reintentar</string>
+    <string name="native_on_shelf">En estanterías</string>
+    <string name="native_add_folder_to_shelf">Añadir a estanterías</string>
+    <string name="native_guide_checking">Comprobando los cómics en el servidor…</string>
+    <string name="native_guide_to_read">Por leer</string>
+    <string name="native_guide_read">Leídos</string>
+    <string name="native_guide_missing">Pendientes de obtener</string>
+    <string name="native_guide_stats_legend">Leídos · Disponibles · Pendientes de obtener</string>
+    <string name="native_guide_continue">Continúa leyendo</string>
+    <string name="native_guide_next">Tu siguiente lectura</string>
+    <string name="native_guide_read_now">Leer ahora</string>
+    <string name="native_guide_download_read">Descargar y leer</string>
+    <string name="native_guide_status_read">Leído</string>
+    <string name="native_guide_status_reading">Leyendo</string>
+    <string name="native_guide_status_available">Disponible</string>
+    <string name="native_guide_status_partial">Parcial</string>
+    <string name="native_guide_status_missing">Pendiente de obtener</string>
+    <string name="native_guide_status_unknown">Sin comprobar</string>
+    <string name="native_reopen_from_server">Se descargará de nuevo del servidor</string>
+    <plurals name="native_chronology_count">
+        <item quantity="one">%d lectura</item>
+        <item quantity="other">%d lecturas</item>
     </plurals>
 </resources>

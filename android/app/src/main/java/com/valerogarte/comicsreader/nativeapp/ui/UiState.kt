@@ -3,7 +3,7 @@ package com.valerogarte.comicsreader.nativeapp.ui
 import android.graphics.Bitmap
 import com.valerogarte.comicsreader.nativeapp.reader.ReadingFonts
 
-enum class LibraryDestination { BOOKS, SFTP, SHELF }
+enum class LibraryDestination { BOOKS, SFTP, SHELF, GUIDE }
 enum class ReadFilter { ALL, UNREAD, READING, FINISHED }
 enum class LibraryLayout { GRID, LIST }
 enum class ReaderMode { HORIZONTAL, VERTICAL }
@@ -17,9 +17,57 @@ data class UiBook(
     val coverPath: String? = null,
     val shelfIds: List<String> = emptyList(),
     val progress: Float = 0f,
+    val sourceId: String? = null,
+    val remotePath: String? = null,
 )
 
 data class UiShelf(val id: String, val name: String)
+
+/** A shelf is a server folder; offline it lists the downloaded books under it. */
+data class UiShelfPath(val id: String, val name: String, val serverId: String, val sourceId: String, val path: String)
+
+data class UiGuideSummary(val id: String, val title: String, val itemCount: Int)
+
+enum class GuideItemStatus { READ, READING, AVAILABLE, PARTIAL, MISSING, UNKNOWN }
+
+data class UiGuideFile(
+    val path: String,
+    val name: String,
+    val coverPath: String? = null,
+    val bookId: String? = null,
+    val progress: Float = 0f,
+    /** Known on the server or downloaded; null while the folder has not been read yet. */
+    val available: Boolean? = null,
+    val downloading: Boolean = false,
+)
+
+data class UiGuideItem(
+    val key: String,
+    val number: String,
+    val title: String,
+    val detail: String,
+    val category: String,
+    val priority: String,
+    val note: String,
+    val files: List<UiGuideFile>,
+    val status: GuideItemStatus,
+) {
+    val coverPath get() = files.firstNotNullOfOrNull { it.coverPath }
+    val progress get() = if (files.isEmpty()) 0f else files.sumOf { it.progress.toDouble() }.toFloat() / files.size
+}
+
+data class UiGuideSection(val title: String, val items: List<UiGuideItem>)
+
+data class UiGuideView(
+    val id: String,
+    val title: String,
+    val description: String,
+    val serverName: String?,
+    val sections: List<UiGuideSection>,
+    val checking: Boolean = false,
+) {
+    val items get() = sections.flatMap { it.items }
+}
 
 data class UiReadingStatistics(
     val totalBooks: Int = 0,
@@ -40,6 +88,9 @@ data class UiReadingTimelineEntry(
     val startedAt: Long,
     val finishedAt: Long?,
     val readingSeconds: Long,
+    /** The local copy is still here, or its server and path are known to bring it back. */
+    val canOpen: Boolean = false,
+    val local: Boolean = false,
 )
 
 data class UiSftpServer(
@@ -106,6 +157,10 @@ data class UiReaderState(
 data class AppUiState(
     val books: List<UiBook> = emptyList(),
     val shelves: List<UiShelf> = emptyList(),
+    val shelfPaths: List<UiShelfPath> = emptyList(),
+    val guides: List<UiGuideSummary> = emptyList(),
+    val selectedGuideId: String? = null,
+    val guide: UiGuideView? = null,
     val destination: LibraryDestination = LibraryDestination.BOOKS,
     val selectedShelfId: String? = null,
     val selectedSftpServerId: String? = null,
@@ -143,6 +198,17 @@ interface AppActions {
     fun onOpenBook(id: String) {}
     fun onDeleteBooks(ids: List<String>) {}
     fun onMarkBooksRead(ids: List<String>) {}
+    fun onMarkBooksUnread(ids: List<String>) {}
+    fun onOpenTimelineEntry(bookId: String) {}
+    fun onAddCurrentFolderToShelves() {}
+    fun onOpenShelfPath(id: String) {}
+    fun onDeleteShelfPath(id: String) {}
+    fun onOpenGuide(id: String) {}
+    fun onOpenGuideFile(path: String) {}
+    fun onRefreshGuide() {}
+    fun onDeleteGuide(id: String) {}
+    fun onImportGuide() {}
+    fun onExportGuide(id: String) {}
     fun onCreateShelf(name: String) {}
     fun onAddBooksToShelf(ids: List<String>, name: String) {}
     fun onDeleteShelf(id: String) {}

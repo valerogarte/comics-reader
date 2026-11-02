@@ -10,6 +10,8 @@ import com.valerogarte.comicsreader.nativeapp.model.DownloadSummary
 import com.valerogarte.comicsreader.nativeapp.model.RemoteEntry
 import com.valerogarte.comicsreader.nativeapp.model.RemoteFolder
 import com.valerogarte.comicsreader.nativeapp.model.SftpConfig
+import com.valerogarte.comicsreader.nativeapp.model.ShelfPath
+import com.valerogarte.comicsreader.nativeapp.model.StoredGuide
 import com.valerogarte.comicsreader.nativeapp.reader.DocumentMetadata
 import com.valerogarte.comicsreader.nativeapp.reader.NativeDocumentEngine
 import com.valerogarte.comicsreader.nativeapp.reader.RangeSource
@@ -40,6 +42,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.ContinuationInterceptor
 
 /** All book bytes live in Android's private files directory, independently of browser storage. */
@@ -49,6 +52,10 @@ class LibraryRepository(context: Context) : Closeable {
     private val booksDirectory = File(root, "books").apply { ensureDirectory() }
     private val coversDirectory = File(root, "covers").apply { ensureDirectory() }
     private val remoteCoversDirectory = File(root, "remote-covers").apply { ensureDirectory() }
+    /** Chronology covers: never pruned by cache rebuilds or by cleaning books from the device. */
+    private val historyCoversDirectory = File(root, "history-covers").apply { ensureDirectory() }
+    /** Guides dropped here (for example with adb) are imported on start and then removed. */
+    private val guidesInbox = File(appContext.filesDir, "guides-inbox")
     private val database = LibraryDatabase(appContext)
     private val configuration = SftpConfigStore(appContext)
     private val engine = NativeDocumentEngine(appContext)
@@ -169,6 +176,8 @@ class LibraryRepository(context: Context) : Closeable {
             val affected = selected.mapNotNull { it.shelfName }.toSet()
             selected.forEach { book ->
                 currentCoroutineContext().ensureActive()
+                // A book in the chronology keeps its cover and origin there before its files go.
+                runCatching { keepHistory(book) }
                 val local = privateFile(book.localPath)
                 book.coverPath?.let { path ->
                     val cover = privateFile(path)
@@ -226,9 +235,93 @@ class LibraryRepository(context: Context) : Closeable {
     suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long = 0) = withContext(Dispatchers.IO) {
         val actualTotal = total.coerceAtLeast(0)
         database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal, readSeconds)
+        database.book(id)?.let { runCatching { keepHistory(it) } }
+        Unit
     }
 
-    suspend fun markFinished(ids: Collection<String>) = withContext(Dispatchers.IO) { ids.forEach { database.markFinished(it) } }
+    suspend fun markFinished(ids: Collection<String>) = withContext(Dispatchers.IO) {
+        ids.forEach { id -> database.markFinished(id); database.book(id)?.let { runCatching { keepHistory(it) } } }
+    }
+
+    suspend fun markUnread(ids: Collection<String>) = withContext(Dispatchers.IO) { ids.forEach { database.markUnread(it) } }
+
+    /** Copies the cover into the chronology and records where the book came from, once. */
+    private fun keepHistory(book: BookEntry) {
+        val log = database.readingLogEntry(book.id) ?: return
+        val hasCover = log.coverPath?.let { File(it).isFile } == true
+        if (hasCover && log.sourceId != null) return
+        val cover = if (hasCover) log.coverPath else book.coverPath?.let { path ->
+            val source = File(path)
+            if (source.isFile) copyPrivateFile(source, File(historyCoversDirectory, "${book.id}.jpg")) else null
+        }
+        database.updateLogOrigin(book.id, cover, log.sourceId ?: book.sourceId, log.remotePath ?: book.remotePath)
+    }
+
+    /** Entries read before chronology covers existed get theirs while the book is still here. */
+    suspend fun migrateHistory(): Boolean = withContext(Dispatchers.IO) {
+        mutation.withLock {
+            var changed = false
+            val sources = runCatching { configuration.loadAll().map { it.id }.toSet() }.getOrDefault(emptySet())
+            database.allReadingLog().filter { it.coverPath?.let { path -> File(path).isFile } != true || it.sourceId == null }.forEach { log ->
+                val book = database.book(log.bookId)
+                if (book != null) { runCatching { keepHistory(book); changed = true }; return@forEach }
+                // The book was cleaned before the chronology kept anything: find it in the catalog by its title.
+                val entry = database.remoteFilesByTitle(log.title)
+                    .sortedWith(compareByDescending<RemoteEntry> { it.sourceId in sources }.thenByDescending { it.coverPath?.let { path -> File(path).isFile } == true })
+                    .firstOrNull() ?: return@forEach
+                runCatching {
+                    val cover = log.coverPath?.takeIf { File(it).isFile } ?: entry.coverPath?.let { path ->
+                        File(path).takeIf { it.isFile }?.let { copyPrivateFile(it, File(historyCoversDirectory, "${log.bookId}.jpg")) }
+                    }
+                    database.updateLogOrigin(log.bookId, cover, log.sourceId ?: entry.sourceId, log.remotePath ?: entry.path)
+                    changed = true
+                }
+            }
+            changed
+        }
+    }
+
+    suspend fun loadShelfPaths(): List<ShelfPath> = withContext(Dispatchers.IO) { database.shelfPaths() }
+
+    suspend fun addShelfPath(profileId: String, path: String, name: String): ShelfPath = withContext(Dispatchers.IO) {
+        val config = captureConfig(profileId)
+        val shelf = ShelfPath(UUID.randomUUID().toString(), validShelfName(name), profileId, config.id, normalizePath(path))
+        mutation.withLock { database.addShelfPath(shelf) }
+        shelf
+    }
+
+    suspend fun deleteShelfPath(id: String) = withContext(Dispatchers.IO) { mutation.withLock { database.deleteShelfPath(id) } }
+
+    /** A short connection test that never waits for a running folder scan. */
+    suspend fun isServerReachable(profileId: String, timeoutMillis: Long = 6000): Boolean = withContext(Dispatchers.IO) {
+        val config = runCatching { captureConfig(profileId) }.getOrNull() ?: return@withContext false
+        withTimeoutOrNull(timeoutMillis) {
+            runCatching { runInterruptible(Dispatchers.IO) { clientFor(profileId).listShelf(config.credentials(), config.rootPath, "/") } }.isSuccess
+        } ?: false
+    }
+
+    /** The profile's catalog id and root, so guides written with server paths can be resolved. */
+    suspend fun serverRoot(profileId: String): Pair<String, String>? = withContext(Dispatchers.IO) {
+        runCatching { captureConfig(profileId) }.getOrNull()?.let { it.id to normalizePath(it.rootPath) }
+    }
+
+    suspend fun cachedRemoteEntry(sourceId: String, path: String): RemoteEntry? = withContext(Dispatchers.IO) {
+        database.remoteEntry(sourceId, normalizePath(path))
+    }
+
+    suspend fun isFolderCached(sourceId: String, path: String): Boolean = withContext(Dispatchers.IO) {
+        database.isFolderCached(sourceId, normalizePath(path))
+    }
+
+    suspend fun loadGuides(): List<StoredGuide> = withContext(Dispatchers.IO) { database.guides() }
+    suspend fun saveGuide(guide: StoredGuide) = withContext(Dispatchers.IO) { mutation.withLock { database.saveGuide(guide) } }
+    suspend fun deleteGuide(id: String) = withContext(Dispatchers.IO) { mutation.withLock { database.deleteGuide(id) } }
+
+    /** Returns the JSON texts waiting in the inbox and removes them once read. */
+    suspend fun takeInboxGuides(): List<String> = withContext(Dispatchers.IO) {
+        guidesInbox.listFiles { file -> file.isFile && file.name.endsWith(".json", ignoreCase = true) }.orEmpty()
+            .sortedBy { it.name }.mapNotNull { file -> runCatching { file.readText(Charsets.UTF_8) }.getOrNull().also { file.delete() } }
+    }
 
     suspend fun loadReadingLog() = withContext(Dispatchers.IO) { database.readingLog() }
 
@@ -573,6 +666,7 @@ class LibraryRepository(context: Context) : Closeable {
                 sourceId = config?.id, remotePath = remotePath, size = destination.length(), modified = modified,
             )
             database.insertBook(book, hash)
+            if (config != null && remotePath != null) runCatching { database.adoptReadingLog(id, config.id, remotePath) }
             return book
         } catch (error: Exception) {
             destination.delete()

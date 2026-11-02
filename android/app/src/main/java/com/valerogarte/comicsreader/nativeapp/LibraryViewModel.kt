@@ -40,6 +40,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val state = mutableState.asStateFlow()
     @Volatile private var books = emptyList<BookEntry>()
     @Volatile private var downloadedBooks = emptyMap<Pair<String, String>, BookEntry>()
+    @Volatile private var readingLog = emptyList<ReadingLogEntry>()
+    @Volatile private var shelfPaths = emptyList<ShelfPath>()
+    /** Catalog source id (host, user and root) to the server profile that reaches it. */
+    @Volatile private var sourceProfiles = emptyMap<String, String>()
+    /** Remote books to open as soon as their download finishes: (source id, path). */
+    private val pendingOpen = mutableSetOf<Pair<String, String>>()
+    private var guideJob: Job? = null
     private class RemoteBrowser {
         var path = "/"
         var folder: RemoteFolder? = null
@@ -96,6 +103,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         initializeJob = launchOperation {
             try {
                 val configs = repository.loadSftpConfigs()
+                sourceProfiles = configs.associate { it.id to it.profileId }
                 mutableState.update { it.copy(settings = it.settings.withSftp(configs), selectedSftpServerId = configs.firstOrNull()?.profileId) }
             } finally {
                 // A damaged server configuration must not hide the independent local library.
@@ -105,6 +113,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             try {
                 initializeJob?.join()
+                if (repository.migrateHistory()) reloadLibrary()
+                importInboxGuides()
                 if (repository.repairMissingCovers()) reloadLibrary()
                 if (repository.refreshComicCovers()) reloadLibrary()
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -183,7 +193,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     override fun onDeleteBooks(ids: List<String>) {
         launchOperation("Eliminando del dispositivo") {
             ids.forEach { readerProgressVersions[it] = readerProgressIds.incrementAndGet() }
-            val affectedShelves = books.filter { it.id in ids }.mapNotNull { it.shelfName }.toSet()
             if (mutableState.value.reader?.bookId in ids) {
                 val generation = ++readerGeneration
                 readerAppearanceJob?.cancel()
@@ -193,12 +202,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 closeReaderSession(generation)
             }
             try { readerProgressLock.withLock { repository.deleteBooks(ids) } }
-            finally {
-                withContext(NonCancellable) { reloadLibrary() }
-                val newlyEmpty = affectedShelves.filter { shelf -> books.none { it.shelfName == shelf } }
-                emptyShelves.addAll(newlyEmpty.filter { it !in emptyShelves })
-                showNextEmptyShelf()
-            }
+            // Shelves are server folders now: cleaning books never leaves one to delete.
+            finally { withContext(NonCancellable) { reloadLibrary() } }
         }
     }
 
@@ -207,6 +212,277 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try { readerProgressLock.withLock { repository.markFinished(ids) } }
             finally { withContext(NonCancellable) { reloadLibrary() } }
         }
+    }
+
+    override fun onMarkBooksUnread(ids: List<String>) {
+        launchOperation {
+            try { readerProgressLock.withLock { repository.markUnread(ids) } }
+            finally { withContext(NonCancellable) { reloadLibrary() } }
+        }
+    }
+
+    /** Opens a book of the chronology; a cleaned book comes back from its server and opens. */
+    override fun onOpenTimelineEntry(bookId: String) {
+        val book = books.find { it.id == bookId && File(it.localPath).isFile }
+        if (book != null) { openBook(book.id); return }
+        val log = readingLog.find { it.bookId == bookId }
+        val profile = log?.sourceId?.let(sourceProfiles::get)
+        val path = log?.remotePath
+        if (profile == null || path == null) {
+            mutableState.update { it.copy(error = "No se sabe de qué servidor procede este libro") }
+            return
+        }
+        val folder = remoteParentPath(path)
+        browsers.getOrPut(profile) { RemoteBrowser() }.apply { if (this.path != folder) { this.path = folder; this.folder = null } }
+        mutableState.update { it.copy(destination = LibraryDestination.SFTP, selectedSftpServerId = profile, selectedShelfId = null) }
+        loadFolder(folder, serverId = profile)
+        downloadPath(profile, path, open = true)
+    }
+
+    /** Queues one server path, known from the catalog or not; with [open] the book opens when ready. */
+    private fun downloadPath(serverId: String, path: String, open: Boolean) {
+        viewModelScope.launch {
+            try {
+                val (sourceId, _) = repository.serverRoot(serverId) ?: throw IOException("El servidor SFTP ya no está configurado")
+                val normalized = LibraryRepository.normalizePath(path)
+                downloadedBooks[sourceId to normalized]?.let { if (open) openBook(it.id); return@launch }
+                val entry = repository.cachedRemoteEntry(sourceId, normalized)?.takeIf { !it.isDirectory }
+                    ?: RemoteEntry(normalized.substringAfterLast('/'), normalized, false, sourceId = sourceId)
+                if (open) pendingOpen += sourceId to normalized
+                val browser = browsers.getOrPut(serverId) { RemoteBrowser() }
+                if (browser.queue.none { it.path == normalized } && normalized !in browser.transferringPaths) browser.queue.addLast(entry)
+                if (browser.transferJob?.isActive == true) {
+                    browser.transferringPaths.firstOrNull()?.let { active -> browser.transferMessage = downloadMessage(browser, active.substringAfterLast('/')) }
+                    publishRemote(serverId); updateBusyMessage()
+                } else startDownloadQueue(serverId, browser)
+                publishGuide()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    override fun onAddCurrentFolderToShelves() {
+        val serverId = mutableState.value.selectedSftpServerId ?: return
+        val path = mutableState.value.remotePath
+        val existing = shelfPaths.find { it.profileId == serverId && it.path == path }
+        launchOperation {
+            if (existing != null) {
+                repository.deleteShelfPath(existing.id)
+            } else {
+                val name = path.trimEnd('/').substringAfterLast('/').ifBlank { serverName(serverId) }
+                repository.addShelfPath(serverId, path, name)
+            }
+            reloadLibrary()
+        }
+    }
+
+    /** Online the shelf opens its server folder; without the server, its downloaded books. */
+    override fun onOpenShelfPath(id: String) {
+        val shelf = shelfPaths.find { it.id == id } ?: return
+        launchOperation("Conectando con ${serverName(shelf.profileId)}") {
+            val reachable = mutableState.value.settings.sftpServers.any { it.id == shelf.profileId } &&
+                repository.isServerReachable(shelf.profileId)
+            if (reachable) {
+                browsers.getOrPut(shelf.profileId) { RemoteBrowser() }.apply { if (path != shelf.path) { path = shelf.path; folder = null } }
+                mutableState.update { it.copy(destination = LibraryDestination.SFTP, selectedSftpServerId = shelf.profileId, selectedShelfId = null) }
+                loadFolder(shelf.path, serverId = shelf.profileId)
+            } else {
+                mutableState.update { it.copy(destination = LibraryDestination.SHELF, selectedShelfId = id) }
+                reloadLibrary()
+            }
+        }
+    }
+
+    override fun onDeleteShelfPath(id: String) {
+        launchOperation {
+            repository.deleteShelfPath(id)
+            mutableState.update { if (it.selectedShelfId == id) it.copy(destination = LibraryDestination.BOOKS, selectedShelfId = null) else it }
+            reloadLibrary()
+        }
+    }
+
+    override fun onOpenGuide(id: String) {
+        mutableState.update { it.copy(destination = LibraryDestination.GUIDE, selectedGuideId = id,
+            guide = it.guide?.takeIf { guide -> guide.id == id }) }
+        publishGuide(readFolders = true)
+    }
+
+    override fun onRefreshGuide() = publishGuide(readFolders = true, refresh = true)
+
+    override fun onOpenGuideFile(path: String) {
+        val guideId = mutableState.value.selectedGuideId ?: return
+        viewModelScope.launch {
+            try {
+                val (guide, profile, sourceId, root) = loadGuideContext(guideId) ?: return@launch
+                if (profile == null || sourceId == null) {
+                    mutableState.update { it.copy(error = "Configura el servidor SFTP de la guía «${guide.title}»") }
+                    return@launch
+                }
+                val relative = guideRelativePath(path, root)
+                val book = downloadedBooks[sourceId to relative]
+                if (book != null) openBook(book.id) else downloadPath(profile, relative, open = true)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    override fun onDeleteGuide(id: String) {
+        launchOperation {
+            repository.deleteGuide(id)
+            mutableState.update { if (it.selectedGuideId == id) it.copy(destination = LibraryDestination.BOOKS, selectedGuideId = null, guide = null) else it }
+            reloadLibrary()
+        }
+    }
+
+    fun importGuide(uri: Uri) {
+        launchOperation("Importando guía") {
+            val text = withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { "No se puede abrir el archivo" }
+                    val bytes = input.readBytes()
+                    require(bytes.size <= 8 * 1024 * 1024) { "La guía es demasiado grande" }
+                    bytes.toString(Charsets.UTF_8)
+                }
+            }
+            val guide = saveGuideText(text)
+            reloadLibrary()
+            onOpenGuide(guide.id)
+        }
+    }
+
+    fun exportGuide(id: String, uri: Uri) {
+        launchOperation("Exportando guía") {
+            val stored = repository.loadGuides().find { it.id == id } ?: throw IOException("La guía ya no existe")
+            withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openOutputStream(uri, "wt").use { output ->
+                    requireNotNull(output) { "No se puede escribir el archivo" }
+                    output.write(stored.json.toByteArray(Charsets.UTF_8))
+                }
+            }
+            mutableState.update { it.copy(message = "Guía «${stored.title}» exportada") }
+        }
+    }
+
+    fun guideTitle(id: String): String? = mutableState.value.guides.find { it.id == id }?.title
+
+    private suspend fun saveGuideText(text: String): ReadingGuide {
+        val guide = withContext(Dispatchers.Default) { GuideJson.parse(text) }
+        repository.saveGuide(StoredGuide(guide.id, guide.title, GuideJson.write(guide), System.currentTimeMillis()))
+        return guide
+    }
+
+    private suspend fun importInboxGuides() {
+        val texts = repository.takeInboxGuides()
+        if (texts.isEmpty()) return
+        var imported = 0
+        texts.forEach { text -> try { saveGuideText(text); imported++ } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { } }
+        reloadLibrary()
+        if (imported > 0) mutableState.update { it.copy(message = if (imported == 1) "1 guía de lectura importada" else "$imported guías de lectura importadas") }
+    }
+
+    private data class GuideContext(val guide: ReadingGuide, val profile: String?, val sourceId: String?, val root: String)
+
+    private suspend fun loadGuideContext(id: String): GuideContext? {
+        val stored = repository.loadGuides().find { it.id == id } ?: return null
+        val guide = withContext(Dispatchers.Default) { GuideJson.parse(stored.json) }
+        val servers = mutableState.value.settings.sftpServers
+        val server = guide.server?.let { name -> servers.find { it.name.equals(name, true) || it.host.equals(name, true) } } ?: servers.firstOrNull()
+        val root = server?.let { repository.serverRoot(it.id) }
+        return GuideContext(guide, server?.id, root?.first, root?.second ?: "/")
+    }
+
+    /** Guides may name files by their full path on the server; the profile root is removed. */
+    private fun guideRelativePath(path: String, root: String): String {
+        val clean = "/" + path.trim().trim('/')
+        // Synology's SFTP shows shared folders at the top: /volume1/recursos is /recursos there.
+        val shared = clean.replace(Regex("^/volume\\d+(?=/)"), "")
+        val prefix = root.trimEnd('/')
+        val relative = listOf(clean, shared).firstOrNull { prefix.isNotEmpty() && (it == prefix || it.startsWith("$prefix/")) }
+            ?.removePrefix(prefix) ?: shared
+        return LibraryRepository.normalizePath(relative.ifBlank { "/" })
+    }
+
+    private fun publishGuide(readFolders: Boolean = false, refresh: Boolean = false) {
+        val id = mutableState.value.selectedGuideId ?: return
+        if (mutableState.value.destination != LibraryDestination.GUIDE) return
+        // A folder check in progress keeps running; library changes only redraw the guide.
+        if (!readFolders && guideJob?.isActive == true) {
+            viewModelScope.launch {
+                try { showGuide(id, mutableState.value.guide?.checking == true) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { }
+            }
+            return
+        }
+        guideJob?.cancel()
+        guideJob = viewModelScope.launch {
+            try {
+                showGuide(id, readFolders)
+                if (!readFolders) return@launch
+                val context = loadGuideContext(id) ?: return@launch
+                val profile = context.profile
+                val sourceId = context.sourceId
+                if (profile != null && sourceId != null) {
+                    val folders = context.guide.items.flatMap { it.files }.map { remoteParentPath(guideRelativePath(it, context.root)) }.distinct()
+                    for (folder in folders) {
+                        if (!refresh && repository.isFolderCached(sourceId, folder)) continue
+                        try { repository.loadRemoteFolder(profile, folder, refresh) }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { }
+                        showGuide(id, true)
+                    }
+                }
+                showGuide(id, false)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
+    private suspend fun showGuide(id: String, checking: Boolean) {
+        val view = resolveGuide(id, checking)
+        mutableState.update { if (it.selectedGuideId == id) it.copy(guide = view) else it }
+    }
+
+    private suspend fun resolveGuide(id: String, checking: Boolean): UiGuideView? {
+        val context = loadGuideContext(id) ?: return null
+        val sourceId = context.sourceId
+        val logs = readingLog.filter { it.sourceId != null && it.remotePath != null }.associateBy { it.sourceId!! to it.remotePath!! }
+        val transferring = browsers.values.flatMap { it.transferringPaths + it.queue.map { entry -> entry.path } }.toSet()
+        val folderKnown = HashMap<String, Boolean>()
+        val sections = context.guide.sections.map { section ->
+            UiGuideSection(section.title, section.items.map { item ->
+                val files = item.files.map { original ->
+                    val path = guideRelativePath(original, context.root)
+                    val name = path.substringAfterLast('/')
+                    if (sourceId == null) return@map UiGuideFile(path, name)
+                    val book = downloadedBooks[sourceId to path]
+                    val entry = repository.cachedRemoteEntry(sourceId, path)
+                    val log = logs[sourceId to path]
+                    val parent = remoteParentPath(path)
+                    val known = folderKnown.getOrPut(parent) { repository.isFolderCached(sourceId, parent) }
+                    val progress = book?.let(::progress) ?: when {
+                        log?.finishedAt != null -> 1f
+                        log?.startedAt != null -> 0.5f
+                        else -> 0f
+                    }
+                    UiGuideFile(path, entry?.title ?: name.substringBeforeLast('.'), entry?.coverPath ?: book?.coverPath ?: log?.coverPath,
+                        book?.id, progress, available = when { book != null || entry != null -> true; known -> false; else -> null },
+                        downloading = path in transferring)
+                }
+                val status = when {
+                    files.isEmpty() -> GuideItemStatus.MISSING
+                    files.all { it.progress >= 1f } -> GuideItemStatus.READ
+                    files.any { it.progress > 0f } -> GuideItemStatus.READING
+                    files.all { it.available == true } -> GuideItemStatus.AVAILABLE
+                    files.any { it.available == true } -> GuideItemStatus.PARTIAL
+                    files.all { it.available == false } -> GuideItemStatus.MISSING
+                    else -> GuideItemStatus.UNKNOWN
+                }
+                UiGuideItem(item.key, item.number, item.title, item.detail, item.category, item.priority, item.note, files, status)
+            })
+        }
+        val serverName = context.profile?.let(::serverName)
+        return UiGuideView(context.guide.id, context.guide.title, context.guide.description, serverName, sections, checking)
     }
 
     override fun onDeleteShelf(id: String) {
@@ -358,6 +634,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     withContext(NonCancellable) { reloadLibrary() }
                     browser.transferringPaths = emptySet()
                     publishRemote(serverId)
+                    entry.sourceId?.let { source ->
+                        if (pendingOpen.remove(source to entry.path) && mutableState.value.reader == null)
+                            downloadedBooks[source to entry.path]?.let { openBook(it.id) }
+                    }
                 }
                 if (failed == 1) lastError?.let(::report)
                 else if (failed > 1) mutableState.update { it.copy(error = "${serverName(serverId)}: $failed archivos no se han podido descargar") }
@@ -499,6 +779,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
         repository.saveSftpConfigs(configs)
         val saved = repository.loadSftpConfigs()
+        sourceProfiles = saved.associate { it.id to it.profileId }
         saved.forEach { config ->
             val old = oldConfigs[config.profileId]
             if (old != null && old.id != config.id) browsers.remove(config.profileId)
@@ -802,25 +1083,46 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val loadedBooks = repository.loadBooks()
         val readingLog = repository.loadReadingLog()
         val shelves = repository.loadShelves().map { UiShelf(it.name, it.name) }
+        val paths = repository.loadShelfPaths()
+        val guides = repository.loadGuides().map { stored ->
+            UiGuideSummary(stored.id, stored.title, runCatching { GuideJson.parse(stored.json).items.size }.getOrDefault(0))
+        }
         val downloads = withContext(Dispatchers.IO) {
             loadedBooks.filter { it.sourceId != null && it.remotePath != null && File(it.localPath).isFile }
                 .associateBy { requireNotNull(it.sourceId) to requireNotNull(it.remotePath) }
         }
         books = loadedBooks
         downloadedBooks = downloads
+        this.readingLog = readingLog
+        shelfPaths = paths
         mutableState.update {
-            val selectedShelf = it.selectedShelfId?.takeIf { id -> shelves.any { shelf -> shelf.id == id } }
+            val selectedShelf = it.selectedShelfId?.takeIf { id -> paths.any { shelf -> shelf.id == id } }
+            val selectedGuide = it.selectedGuideId?.takeIf { id -> guides.any { guide -> guide.id == id } }
             it.copy(
                 selectedShelfId = selectedShelf,
-                destination = if (it.destination == LibraryDestination.SHELF && selectedShelf == null) LibraryDestination.BOOKS else it.destination,
-                books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName), progress(book)) },
-                shelves = shelves, remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
+                selectedGuideId = selectedGuide,
+                destination = when {
+                    it.destination == LibraryDestination.SHELF && selectedShelf == null -> LibraryDestination.BOOKS
+                    it.destination == LibraryDestination.GUIDE && selectedGuide == null -> LibraryDestination.BOOKS
+                    else -> it.destination
+                },
+                books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName),
+                    progress(book), book.sourceId, book.remotePath) },
+                shelves = shelves,
+                shelfPaths = paths.map { shelf -> UiShelfPath(shelf.id, shelf.name, shelf.profileId, shelf.sourceId, shelf.path) },
+                guides = guides,
+                remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
                 readingStatistics = readingStatistics(loadedBooks).copy(timeline = readingLog.map { entry ->
-                    UiReadingTimelineEntry(entry.bookId, entry.title, loadedBooks.find { it.id == entry.bookId }?.coverPath,
-                        entry.startedAt ?: entry.lastReadAt, entry.finishedAt, entry.seconds)
+                    val book = loadedBooks.find { it.id == entry.bookId }
+                    val local = book != null && File(book.localPath).isFile
+                    UiReadingTimelineEntry(entry.bookId, entry.title,
+                        entry.coverPath?.takeIf { path -> File(path).isFile } ?: book?.coverPath,
+                        entry.startedAt ?: entry.lastReadAt, entry.finishedAt, entry.seconds,
+                        canOpen = local || (entry.remotePath != null && entry.sourceId in sourceProfiles), local = local)
                 }),
             )
         }
+        publishGuide()
     }
 
     private fun readingStatistics(books: List<BookEntry>): UiReadingStatistics {

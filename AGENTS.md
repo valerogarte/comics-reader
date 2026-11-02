@@ -18,9 +18,10 @@ La aplicación es exclusivamente Android nativa: Kotlin, Jetpack Compose, SQLite
 - Navegar SFTP guarda únicamente fichas y miniaturas. No descargar libros completos durante el catálogo. Consultar la caché hasta sincronización explícita.
 - Admitir múltiples servidores con operaciones y claves SSH independientes. Pasar siempre el perfil de origen a las operaciones; no inferirlo de la selección actual durante una descarga.
 - El perfil NAS inicial procede de `android/sftp-default.local.json`, ignorado por Git. Nunca emitir ni versionar sus credenciales. Sembrar solo una vez; respetar su eliminación posterior.
-- Una descarga SFTP añade el libro a Libros y a la estantería de sus carpetas padre.
-- Las estanterías muestran únicamente archivos descargados.
-- El borrado local es definitivo. No existe papelera. Preguntar si se quiere eliminar una estantería que quede vacía.
+- Una descarga SFTP añade el libro a Libros.
+- Una estantería es una carpeta de un servidor SFTP añadida desde esa carpeta («Añadir a estanterías»). Con servidor abre la carpeta; sin conexión muestra los libros descargados bajo esa ruta.
+- Guías de lectura: JSON importable/exportable (`model/ReadingGuide.kt`) con secciones y entradas que apuntan a archivos del servidor sin copiarlos; una entrada sin archivos disponibles se muestra como pendiente de obtener. Los JSON dejados en `files/guides-inbox` se importan al arrancar.
+- Limpiar del dispositivo es definitivo (no hay papelera), pero la cronología conserva su portada (`history-covers`) y el origen SFTP del libro para volver a descargarlo y abrirlo.
 - Ajustes limitados a apariencia, fuentes, lectura, SFTP e inteligencia artificial (proveedor y modelo; sin funciones que los usen todavía).
 - Configuración desde la cabecera; el pie del menú lateral abre Estadísticas de lectura.
 - Datos en almacenamiento privado Android; credenciales cifradas con Android Keystore. Nunca registrar contraseñas.

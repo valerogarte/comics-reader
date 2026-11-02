@@ -23,6 +23,13 @@ class MainActivity : ComponentActivity() {
     private val importBooks = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> model.importBooks(uris) }
     private val importFont = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importFont) }
     private val importBackground = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importBackground) }
+    private val importGuide = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(model::importGuide) }
+    private var exportingGuideId: String? = null
+    private val exportGuide = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val id = exportingGuideId
+        exportingGuideId = null
+        if (uri != null && id != null) model.exportGuide(id, uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +40,12 @@ class MainActivity : ComponentActivity() {
             override fun onImportBooks() { importBooks.launch(arrayOf("*/*")) }
             override fun onImportFont() { importFont.launch(arrayOf("*/*")) }
             override fun onPickBackground() { importBackground.launch(arrayOf("image/*")) }
+            override fun onImportGuide() { importGuide.launch(arrayOf("application/json", "text/*", "*/*")) }
+            override fun onExportGuide(id: String) {
+                exportingGuideId = id
+                val title = model.guideTitle(id)?.replace(Regex("[^\\p{L}\\p{N} ._-]"), "")?.trim().orEmpty().ifEmpty { "guia" }
+                exportGuide.launch("$title.json")
+            }
         }
         // Register before Compose so drawer/selection handlers retain priority. The activity
         // also keeps a fallback that navigates the library instead of finishing its task.
