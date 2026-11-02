@@ -140,6 +140,13 @@
     <string name="native_statistics_saved_positions">Basado en la última posición guardada de cada libro con páginas registradas.</string>
     <string name="native_statistics_open_book">Abre un libro para registrar sus páginas y tu posición de lectura.</string>
     <string name="native_statistics_empty_library">Añade libros a tu biblioteca para empezar a ver tu progreso.</string>
+    <string name="native_statistics_timeline">Cronología</string>
+    <string name="native_statistics_timeline_empty">Aún no hay lecturas registradas. Un libro aparece aquí después de dos minutos leyéndolo, y se da por terminado al llegar a su última página con al menos diez minutos de lectura.</string>
+    <string name="native_statistics_timeline_finished">Terminado el %1$s</string>
+    <string name="native_statistics_timeline_reading">Leyendo desde el %1$s</string>
+    <string name="native_statistics_timeline_started">Empezado el %1$s</string>
+    <string name="native_statistics_reading_time_hours">%1$d h %2$d min de lectura</string>
+    <string name="native_statistics_reading_time_minutes">%1$d min de lectura</string>
     <plurals name="native_statistics_books_progress">
         <item quantity="one">%1$s de %2$s libro</item>
         <item quantity="other">%1$s de %2$s libros</item>

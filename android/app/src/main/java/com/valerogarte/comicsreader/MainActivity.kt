@@ -53,6 +53,16 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) importIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        model.onHostVisible(true)
+    }
+
+    override fun onStop() {
+        model.onHostVisible(false)
+        super.onStop()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

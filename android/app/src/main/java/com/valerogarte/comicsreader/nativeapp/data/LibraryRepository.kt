@@ -180,10 +180,14 @@ class LibraryRepository(context: Context) : Closeable {
         }
     }
 
-    suspend fun saveProgress(id: String, page: Int, total: Int) = withContext(Dispatchers.IO) {
+    suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long) = withContext(Dispatchers.IO) {
         val actualTotal = total.coerceAtLeast(0)
-        database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal)
+        database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal, readSeconds)
     }
+
+    suspend fun markFinished(ids: Collection<String>) = withContext(Dispatchers.IO) { ids.forEach { database.markFinished(it) } }
+
+    suspend fun loadReadingLog() = withContext(Dispatchers.IO) { database.readingLog() }
 
     /** Cached folders return without opening an SSH connection, including when offline. */
     suspend fun loadRemoteFolder(

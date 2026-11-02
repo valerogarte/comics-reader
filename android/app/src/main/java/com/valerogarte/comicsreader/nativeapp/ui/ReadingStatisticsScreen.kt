@@ -1,6 +1,7 @@
 package com.valerogarte.comicsreader.nativeapp.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -10,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -21,7 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.valerogarte.comicsreader.R
+import java.text.DateFormat
 import java.text.NumberFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,6 +101,16 @@ internal fun ReadingStatisticsScreen(statistics: UiReadingStatistics, onClose: (
                             Text(stringResource(R.string.native_statistics_saved_positions), style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        HorizontalDivider()
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            StatisticsHeading(stringResource(R.string.native_statistics_timeline))
+                            if (statistics.timeline.isEmpty()) {
+                                Text(stringResource(R.string.native_statistics_timeline_empty), style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            val dates = remember(locale) { DateFormat.getDateInstance(DateFormat.MEDIUM, locale) }
+                            statistics.timeline.forEach { entry -> TimelineRow(entry, dates) }
+                        }
                     }
                 }
             }
@@ -110,6 +124,30 @@ private fun StatisticCard(label: String, value: String, modifier: Modifier = Mod
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun TimelineRow(entry: UiReadingTimelineEntry, dates: DateFormat) {
+    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        CoverImage(entry.coverPath, entry.title, Modifier.size(width = 44.dp, height = 66.dp).clip(RoundedCornerShape(4.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val started = dates.format(Date(entry.startedAt))
+            Text(
+                if (entry.finishedAt != null) stringResource(R.string.native_statistics_timeline_finished, dates.format(Date(entry.finishedAt)))
+                else stringResource(R.string.native_statistics_timeline_reading, started),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val minutes = (entry.readingSeconds / 60).toInt()
+            val details = listOfNotNull(
+                stringResource(R.string.native_statistics_timeline_started, started).takeIf { entry.finishedAt != null },
+                if (minutes >= 60) stringResource(R.string.native_statistics_reading_time_hours, minutes / 60, minutes % 60)
+                else stringResource(R.string.native_statistics_reading_time_minutes, minutes),
+            )
+            Text(details.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

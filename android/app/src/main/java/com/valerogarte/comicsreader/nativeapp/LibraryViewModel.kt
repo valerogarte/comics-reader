@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.valerogarte.comicsreader.nativeapp.data.LibraryRepository
@@ -28,6 +29,8 @@ import java.util.concurrent.ConcurrentSkipListMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
+
+private const val MAX_READING_GAP_MILLIS = 3 * 60_000L
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application), AppActions {
     private val repository = LibraryRepository(application)
@@ -74,6 +77,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private var readerNavigationRequest = 0L
     private var readerPositionSession = -1
     private var readerCommittedPage = 0
+    // Reading time not yet saved, per book. Time between two page changes counts up to
+    // MAX_READING_GAP_MILLIS, so a reader left open does not add hours; it stops in background.
+    private val pendingReadingMillis = ConcurrentHashMap<String, Long>()
+    private var readingBookId: String? = null
+    private var readingTickAt = 0L
     private val libraryReload = Mutex()
     private var session: DocumentSession? = null
     @Volatile private var sessionOptions: DocumentOptions? = null
@@ -533,6 +541,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private fun openBook(id: String, resumeFraction: Float? = null) {
         flushReaderProgress()
+        readingBookId = id
+        readingTickAt = SystemClock.elapsedRealtime()
         val generation = ++readerGeneration
         readerAppearanceJob?.cancel()
         renderJob?.cancel()
@@ -604,7 +614,25 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val page = pageIndex.coerceIn(0, (reader.pageCount - 1).coerceAtLeast(0))
         if (page != reader.pageIndex) mutableState.update { it.copy(reader = reader.copy(pageIndex = page)) }
         readerCommittedPage = page
+        tickReading()
         scheduleReaderProgress()
+    }
+
+    private fun tickReading() {
+        if (readingTickAt == 0L) return
+        val now = SystemClock.elapsedRealtime()
+        readingBookId?.let { pendingReadingMillis.merge(it, (now - readingTickAt).coerceIn(0L, MAX_READING_GAP_MILLIS), Long::plus) }
+        readingTickAt = now
+    }
+
+    /** Only time with the reader on screen counts as reading. */
+    fun onHostVisible(visible: Boolean) {
+        if (visible) {
+            if (readingBookId != null && readingTickAt == 0L) readingTickAt = SystemClock.elapsedRealtime()
+        } else {
+            flushReaderProgress()
+            readingTickAt = 0L
+        }
     }
 
     private suspend fun renderPage(pageIndex: Int, generation: Int, id: String, title: String, resumeFraction: Float? = null) {
@@ -662,6 +690,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private data class ReaderProgress(val bookId: String, val page: Int, val total: Int, val version: Long)
 
     private fun captureReaderProgress(): ReaderProgress? {
+        tickReading()
         val reader = mutableState.value.reader ?: return null
         if (reader.sessionId != readerPositionSession) return null
         val version = readerProgressIds.incrementAndGet()
@@ -672,7 +701,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun persistReaderProgress(progress: ReaderProgress) = withContext(NonCancellable) {
         readerProgressLock.withLock {
             if (readerProgressVersions[progress.bookId] == progress.version) {
-                repository.saveProgress(progress.bookId, progress.page, progress.total)
+                // Taken when saving, so a superseded capture can never count the same time twice.
+                val millis = pendingReadingMillis.remove(progress.bookId) ?: 0L
+                try { repository.saveProgress(progress.bookId, progress.page, progress.total, millis / 1000) }
+                catch (error: Throwable) { pendingReadingMillis.merge(progress.bookId, millis, Long::plus); throw error }
+                if (millis % 1000 > 0) pendingReadingMillis.merge(progress.bookId, millis % 1000, Long::plus)
             }
         }
     }
@@ -702,6 +735,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     override fun onCloseReader() {
         readerProgressJob?.cancel()
         val progress = captureReaderProgress()
+        readingBookId = null
+        readingTickAt = 0L
         val generation = ++readerGeneration
         readerAppearanceJob?.cancel()
         renderJob?.cancel()
@@ -729,6 +764,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun reloadLibrary() = libraryReload.withLock {
         val loadedBooks = repository.loadBooks()
+        val readingLog = repository.loadReadingLog()
         val shelves = repository.loadShelves().map { UiShelf(it.name, it.name) }
         val downloads = withContext(Dispatchers.IO) {
             loadedBooks.filter { it.sourceId != null && it.remotePath != null && File(it.localPath).isFile }
@@ -743,7 +779,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 destination = if (it.destination == LibraryDestination.SHELF && selectedShelf == null) LibraryDestination.BOOKS else it.destination,
                 books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName), progress(book)) },
                 shelves = shelves, remoteEntries = currentBrowser()?.let { browser -> browser.folder?.let { folder -> mapRemote(folder, browser) } } ?: it.remoteEntries,
-                readingStatistics = readingStatistics(loadedBooks),
+                readingStatistics = readingStatistics(loadedBooks).copy(timeline = readingLog.map { entry ->
+                    UiReadingTimelineEntry(entry.bookId, entry.title, loadedBooks.find { it.id == entry.bookId }?.coverPath,
+                        entry.startedAt ?: entry.lastReadAt, entry.finishedAt, entry.seconds)
+                }),
             )
         }
     }

@@ -27,6 +27,18 @@ data class BookEntry(
 
 data class ShelfEntry(val name: String, val bookCount: Int)
 
+/** One book in the reading chronology; [startedAt] is null until it counts as being read. */
+data class ReadingLogEntry(
+    val bookId: String,
+    val title: String,
+    val seconds: Long,
+    val furthestPage: Int,
+    val pageCount: Int,
+    val startedAt: Long?,
+    val finishedAt: Long?,
+    val lastReadAt: Long,
+)
+
 data class SftpConfig(
     val host: String,
     val port: Int = 22,

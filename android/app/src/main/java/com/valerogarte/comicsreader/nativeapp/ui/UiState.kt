@@ -29,6 +29,17 @@ data class UiReadingStatistics(
     val progressPages: Long = 0,
     val totalPages: Long = 0,
     val booksWithKnownPages: Int = 0,
+    /** Books that counted as being read, newest first; kept after deleting the local copy. */
+    val timeline: List<UiReadingTimelineEntry> = emptyList(),
+)
+
+data class UiReadingTimelineEntry(
+    val bookId: String,
+    val title: String,
+    val coverPath: String?,
+    val startedAt: Long,
+    val finishedAt: Long?,
+    val readingSeconds: Long,
 )
 
 data class UiSftpServer(
