@@ -261,7 +261,7 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                     style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
             } else Modifier)) {
             Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                GuideCover(item, missing)
+                GuideCover(item, missing, Modifier.align(Alignment.Top))
                 Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(listOf(item.number, item.title).filter { it.isNotBlank() }.joinToString(". "),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -315,9 +315,9 @@ private fun StatusNode(item: UiGuideItem, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun GuideCover(item: UiGuideItem, missing: Boolean) {
+private fun GuideCover(item: UiGuideItem, missing: Boolean, modifier: Modifier = Modifier) {
     val width = 52.dp
-    Box(Modifier.size(width = width, height = width * 1.5f)) {
+    Box(modifier.size(width = width, height = width * 1.5f)) {
         if (item.files.size > 1 && !missing) Box(Modifier.matchParentSize().offset(x = 4.dp, y = (-4).dp).rotate(4f)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(6.dp)))
         if (missing) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(6.dp)),
