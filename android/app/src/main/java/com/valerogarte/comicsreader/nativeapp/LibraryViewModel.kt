@@ -129,7 +129,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             if (serverId == null) onShowSettings() else onOpenSftpServer(serverId)
             return
         }
-        mutableState.update { it.copy(destination = destination, selectedShelfId = shelfId, loading = false) }
+        mutableState.update { it.copy(destination = destination, selectedShelfId = shelfId, loading = false,
+            highlightedPaths = emptySet(), returnGuideId = null) }
         updateBusyMessage()
         viewModelScope.launch {
             try { reloadLibrary() }
@@ -142,7 +143,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (mutableState.value.settings.sftpServers.none { it.id == id }) return
         val browser = browsers.getOrPut(id) { RemoteBrowser() }
         mutableState.update { it.copy(destination = LibraryDestination.SFTP, selectedSftpServerId = id,
-            selectedShelfId = null, error = null) }
+            selectedShelfId = null, error = null, highlightedPaths = emptySet(), returnGuideId = null) }
         publishRemote(id)
         if (browser.folder == null && browser.scanJob?.isActive != true) loadFolder(browser.path, serverId = id)
     }
@@ -303,11 +304,33 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onOpenGuide(id: String) {
         mutableState.update { it.copy(destination = LibraryDestination.GUIDE, selectedGuideId = id,
+            highlightedPaths = emptySet(), returnGuideId = null,
             guide = it.guide?.takeIf { guide -> guide.id == id }) }
         publishGuide(readFolders = true)
     }
 
     override fun onRefreshGuide() = publishGuide(readFolders = true, refresh = true)
+
+    /** Opens the server folder that holds a guide entry and highlights its books there. */
+    override fun onRevealGuideItem(key: String) {
+        val guide = mutableState.value.guide ?: return
+        val item = guide.items.find { it.key == key } ?: return
+        val target = item.files.firstOrNull { it.progress < 1f && it.available != false }
+            ?: item.files.firstOrNull { it.available != false } ?: return
+        viewModelScope.launch {
+            try {
+                val context = loadGuideContext(guide.id) ?: return@launch
+                val profile = context.profile ?: throw IOException("Configura el servidor SFTP de la guía «${guide.title}»")
+                val folder = remoteParentPath(target.path)
+                val inFolder = item.files.map { it.path }.filter { remoteParentPath(it) == folder }.toSet()
+                browsers.getOrPut(profile) { RemoteBrowser() }.apply { if (path != folder) { path = folder; this.folder = null } }
+                mutableState.update { it.copy(destination = LibraryDestination.SFTP, selectedSftpServerId = profile,
+                    selectedShelfId = null, highlightedPaths = inFolder, returnGuideId = guide.id) }
+                loadFolder(folder, serverId = profile)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
 
     /** Queues every book of one guide entry that is on the server and not on the device. */
     override fun onDownloadGuideItem(key: String) {
@@ -533,7 +556,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         mutableState.update { it.copy(emptyShelf = emptyShelves.firstOrNull()?.let { name -> UiShelf(name, name) }) }
     }
 
-    override fun onOpenRemoteFolder(path: String) = loadFolder(path)
+    override fun onOpenRemoteFolder(path: String) {
+        // Moving to another folder ends the "shown from the guide" highlight; Back works normally again.
+        mutableState.update { it.copy(highlightedPaths = emptySet(), returnGuideId = null) }
+        loadFolder(path)
+    }
     override fun onSyncRemote() = loadFolder(mutableState.value.remotePath, refresh = true)
 
     private fun loadFolder(path: String, refresh: Boolean = false, serverId: String? = mutableState.value.selectedSftpServerId) {

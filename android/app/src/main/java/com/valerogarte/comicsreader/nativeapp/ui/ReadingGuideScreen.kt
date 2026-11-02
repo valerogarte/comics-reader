@@ -276,6 +276,10 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (item.files.size <= 1 && item.files.any { it.downloading }) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                if (item.files.any { it.available != false }) IconButton(onClick = { actions.onRevealGuideItem(item.key) },
+                    modifier = Modifier.align(Alignment.Top).size(40.dp).testTag("reveal:${item.key}")) {
+                    Icon(Icons.Default.FolderOpen, stringResource(R.string.native_guide_reveal), tint = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     }

@@ -171,6 +171,10 @@ data class AppUiState(
     val operationProgress: Float? = null,
     /** A download is running or queued and can be cancelled from the progress notice. */
     val cancelableDownload: Boolean = false,
+    /** Remote books shown highlighted after "show on the server" from a guide. */
+    val highlightedPaths: Set<String> = emptySet(),
+    /** The guide to return to with Back after showing one of its books on the server. */
+    val returnGuideId: String? = null,
     val message: String? = null,
     val error: String? = null,
     val settings: UiSettings = UiSettings(),
@@ -184,7 +188,9 @@ internal fun remoteParentPath(path: String): String =
     path.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" }
 
 internal fun AppUiState.navigateLibraryBack(actions: AppActions) {
-    if (destination == LibraryDestination.SFTP && remotePath != "/") {
+    if (destination == LibraryDestination.SFTP && returnGuideId != null) {
+        actions.onOpenGuide(returnGuideId)
+    } else if (destination == LibraryDestination.SFTP && remotePath != "/") {
         actions.onOpenRemoteFolder(remoteParentPath(remotePath))
     } else actions.onNavigate(LibraryDestination.BOOKS)
 }
@@ -208,6 +214,7 @@ interface AppActions {
     fun onRefreshGuide() {}
     fun onDownloadGuideSection(sectionIndex: Int) {}
     fun onDownloadGuideItem(key: String) {}
+    fun onRevealGuideItem(key: String) {}
     fun onDeleteGuide(id: String) {}
     fun onImportGuide() {}
     fun onExportGuide(id: String) {}

@@ -3,6 +3,7 @@ package com.valerogarte.comicsreader.nativeapp.ui
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -240,6 +241,15 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
             }
         }
     }
+    // A book shown from a guide: make sure its page is loaded and bring it into view.
+    val highlightIndex = if (isRemote && state.highlightedPaths.isNotEmpty())
+        remoteBooks.indexOfFirst { it.path in state.highlightedPaths }.takeIf { it >= 0 }?.plus(folders.size) else null
+    LaunchedEffect(highlightIndex, layout) {
+        val index = highlightIndex ?: return@LaunchedEffect
+        if (shown <= index) shown = index + PAGE_SIZE
+        delay(150)
+        if (layout == LibraryLayout.GRID) gridState.animateScrollToItem(index) else bookListState.animateScrollToItem(index)
+    }
     LaunchedEffect(state.destination, state.selectedShelfId, state.selectedSftpServerId, state.remotePath) {
         selected = emptySet()
         val collection = "${state.destination}:${state.selectedShelfId}:${state.selectedSftpServerId}:${state.remotePath}"
@@ -467,6 +477,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         if (isRemote) items(pagedRemote, key = { "remote:${it.path}" }) { entry ->
                             BookTile(entry.path, entry.title, entry.format, entry.size, entry.coverPath, entry.progress,
                                 selected = entry.path in selected, downloaded = entry.downloaded, downloading = entry.downloading, queued = entry.queued,
+                                highlighted = entry.path in state.highlightedPaths,
                                 onClick = { if (selected.isNotEmpty()) selected = toggleSelection(selected, entry.path) else actions.onOpenRemoteBook(entry.path) },
                                 onDownload = { actions.onDownloadRemote(entry.path) })
                         } else items(pagedLocal, key = { it.id }) { book ->
@@ -484,6 +495,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         if (isRemote) items(pagedRemote, key = { "remote:${it.path}" }) { entry ->
                             BookListRow(entry.path, entry.title, entry.format, entry.size, entry.coverPath, entry.progress,
                                 selected = entry.path in selected, downloaded = entry.downloaded, downloading = entry.downloading, queued = entry.queued,
+                                highlighted = entry.path in state.highlightedPaths,
                                 onClick = { if (selected.isNotEmpty()) selected = toggleSelection(selected, entry.path) else actions.onOpenRemoteBook(entry.path) },
                                 onDownload = { actions.onDownloadRemote(entry.path) })
                         } else items(pagedLocal, key = { it.id }) { book ->
@@ -679,9 +691,11 @@ private fun BookTile(
     selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false, queued: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
-    onMarkUnread: (() -> Unit)? = null,
+    onMarkUnread: (() -> Unit)? = null, highlighted: Boolean = false,
 ) {
-    Column(Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
+    Column(Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }
+        .then(if (highlighted) Modifier.highlightGlow(RoundedCornerShape(12.dp)) else Modifier)
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) {
             CoverImage(coverPath, title, Modifier.fillMaxSize())
             if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .35f))
@@ -700,6 +714,17 @@ private fun BookTile(
     }
 }
 
+/** A pulsing amber frame for books shown from a reading guide. */
+@Composable
+private fun Modifier.highlightGlow(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "highlight").animateFloat(
+        initialValue = .35f, targetValue = 1f, label = "highlight-alpha",
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween<Float>(900),
+            androidx.compose.animation.core.RepeatMode.Reverse))
+    val color = Color(0xFFFFB300)
+    return this.background(color.copy(alpha = .16f * pulse), shape).border(3.dp, color.copy(alpha = pulse), shape).padding(6.dp)
+}
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun BookListRow(
@@ -707,10 +732,12 @@ private fun BookListRow(
     selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false, queued: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
-    onMarkUnread: (() -> Unit)? = null,
+    onMarkUnread: (() -> Unit)? = null, highlighted: Boolean = false,
 ) {
     Surface(shape = RoundedCornerShape(12.dp), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        modifier = Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
+        modifier = Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }
+            .then(if (highlighted) Modifier.highlightGlow(RoundedCornerShape(12.dp)) else Modifier)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             CoverImage(coverPath, title, Modifier.size(width = 54.dp, height = 81.dp).clip(RoundedCornerShape(4.dp)))
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {

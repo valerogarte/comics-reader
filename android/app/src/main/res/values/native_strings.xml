@@ -206,6 +206,7 @@
     <string name="native_guide_status_missing">Pendiente de obtener</string>
     <string name="native_guide_status_unknown">Sin comprobar</string>
     <string name="native_guide_download_section">Descargar los %1$d cómics de esta sección</string>
+    <string name="native_guide_reveal">Ver en la carpeta del servidor</string>
     <string name="native_guide_more">Leer más</string>
     <string name="native_guide_less">Mostrar menos</string>
     <string name="native_guide_download_all">Descargar todos</string>
