@@ -46,7 +46,7 @@ data class UiGuideItem(
     val number: String,
     val title: String,
     val detail: String,
-    val category: String,
+    val scope: String,
     val priority: String,
     val note: String,
     val files: List<UiGuideFile>,

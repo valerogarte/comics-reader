@@ -505,7 +505,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     files.all { it.available == false } -> GuideItemStatus.MISSING
                     else -> GuideItemStatus.UNKNOWN
                 }
-                UiGuideItem(item.key, item.number, item.title, item.detail, item.category, item.priority, item.note, files, status)
+                UiGuideItem(item.key, item.number, item.title, item.detail, item.scope, item.priority, item.note, files, status)
             })
         }
         val serverName = context.profile?.let(::serverName)

@@ -13,8 +13,9 @@ import java.util.UUID
  * { "format": "comics-reader-guide", "version": 1, "id": "…", "title": "…", "description": "…",
  *   "server": "NAS",
  *   "sections": [ { "title": "01 · Bases", "items": [
- *     { "number": "01", "title": "…", "detail": "Fantastic Four (1961) #1", "category": "4 Fantásticos",
- *       "priority": "Imprescindible", "note": "…", "files": ["/volume1/recursos/Comics/…/001_….cbr"] } ] } ] }
+ *     { "number": "01", "title": "Los Cuatro Fantásticos", "scope": "Fantastic Four (1961) #1",
+ *       "detail": "Por qué leerlo…", "priority": "Imprescindible", "note": "…",
+ *       "files": ["/volume1/recursos/Comics/…/Los_Cuatro_Fantasticos_001_1961.cbr"] } ] } ] }
  * ```
  * File paths may be absolute on the server (the profile's root folder is removed) or relative to it.
  */
@@ -35,7 +36,8 @@ data class GuideItem(
     val number: String,
     val title: String,
     val detail: String = "",
-    val category: String = "",
+    /** Exactly what the entry covers: issues, chapters or volumes. */
+    val scope: String = "",
     val priority: String = "",
     val note: String = "",
     val files: List<String> = emptyList(),
@@ -62,7 +64,7 @@ object GuideJson {
                     number = item.optString("number").trim(),
                     title = item.optString("title").trim().ifEmpty { "Sin título" },
                     detail = item.optString("detail").trim(),
-                    category = item.optString("category").trim(),
+                    scope = item.optString("scope").trim(),
                     priority = item.optString("priority").trim(),
                     note = item.optString("note").trim(),
                     files = (0 until files.length()).map { files.getString(it).trim() }.filter { it.isNotEmpty() },
@@ -82,7 +84,7 @@ object GuideJson {
                 put("items", JSONArray().apply { section.items.forEach { item -> put(JSONObject().apply {
                     put("key", item.key); put("number", item.number); put("title", item.title)
                     if (item.detail.isNotEmpty()) put("detail", item.detail)
-                    if (item.category.isNotEmpty()) put("category", item.category)
+                    if (item.scope.isNotEmpty()) put("scope", item.scope)
                     if (item.priority.isNotEmpty()) put("priority", item.priority)
                     if (item.note.isNotEmpty()) put("note", item.note)
                     put("files", JSONArray(item.files))

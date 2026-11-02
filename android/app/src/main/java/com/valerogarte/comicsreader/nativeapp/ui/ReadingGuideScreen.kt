@@ -190,8 +190,9 @@ private fun NextReading(item: UiGuideItem, actions: AppActions) {
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text(listOf(item.number, item.title).filter { it.isNotBlank() }.joinToString(". "), style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (item.scope.isNotBlank()) ScopeLine(item.scope)
                 if (item.detail.isNotBlank()) Text(item.detail, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 if (target != null) Button(onClick = { actions.onOpenGuideFile(target.path) }, modifier = Modifier.padding(top = 8.dp),
                     enabled = !target.downloading) {
                     Icon(if (target.bookId != null) Icons.AutoMirrored.Filled.MenuBook else Icons.Default.Download, null, Modifier.size(18.dp))
@@ -264,13 +265,12 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                     Text(listOf(item.number, item.title).filter { it.isNotBlank() }.joinToString(". "),
                         style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         color = if (missing) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
-                    if (item.detail.isNotBlank()) Text(item.detail, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (item.scope.isNotBlank()) ScopeLine(item.scope)
                     Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         StatusChip(item.status)
                         if (item.priority.isNotBlank()) PriorityChip(item.priority)
-                        if (item.category.isNotBlank()) TagChip(item.category)
                     }
+                    if (item.detail.isNotBlank()) WhyRead(item.detail)
                     if (item.files.size > 1) FileStrip(item, actions)
                     if (item.note.isNotBlank()) Text(item.note, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -393,8 +393,32 @@ private fun PriorityChip(priority: String) {
     Pill(priority, color)
 }
 
+/** What the entry covers, in a compact line with a stack icon. */
 @Composable
-private fun TagChip(text: String) = Pill(text, MaterialTheme.colorScheme.onSurfaceVariant)
+private fun ScopeLine(scope: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(Icons.Default.Layers, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 2.dp).size(14.dp))
+        Text(scope, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+/** Why the entry matters: three lines, then the whole text on demand. */
+@Composable
+private fun WhyRead(text: String) {
+    var expanded by rememberSaveable(text) { mutableStateOf(false) }
+    var overflows by remember(text) { mutableStateOf(false) }
+    Column(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
+        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        .clickable(enabled = overflows || expanded) { expanded = !expanded }
+        .padding(horizontal = 10.dp, vertical = 8.dp).animateContentSize()) {
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (expanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow })
+        if (overflows || expanded) Text(stringResource(if (expanded) R.string.native_guide_less else R.string.native_guide_more),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp))
+    }
+}
 
 @Composable
 private fun Pill(text: String, color: Color, filled: Boolean = false, height: Dp = 22.dp) {
