@@ -207,6 +207,7 @@ interface AppActions {
     fun onOpenGuideFile(path: String) {}
     fun onRefreshGuide() {}
     fun onDownloadGuideSection(sectionIndex: Int) {}
+    fun onDownloadGuideItem(key: String) {}
     fun onDeleteGuide(id: String) {}
     fun onImportGuide() {}
     fun onExportGuide(id: String) {}

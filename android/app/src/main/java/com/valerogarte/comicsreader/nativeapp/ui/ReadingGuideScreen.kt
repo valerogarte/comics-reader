@@ -275,7 +275,7 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                     if (item.note.isNotBlank()) Text(item.note, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (item.files.any { it.downloading }) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                if (item.files.size <= 1 && item.files.any { it.downloading }) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
             }
         }
     }
@@ -326,7 +326,11 @@ private fun GuideCover(item: UiGuideItem, missing: Boolean) {
 
 @Composable
 private fun FileStrip(item: UiGuideItem, actions: AppActions) {
-    Row(Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val pending = item.files.count { it.bookId == null && it.available != false && !it.downloading }
+    val downloading = item.files.any { it.downloading }
+    // The numbers scroll; "download all" stays pinned at the right edge of the card.
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         item.files.forEachIndexed { index, file ->
             val color = when {
                 file.progress >= 1f -> ReadGreen
@@ -346,6 +350,21 @@ private fun FileStrip(item: UiGuideItem, actions: AppActions) {
                 Text("${index + 1}", style = MaterialTheme.typography.labelSmall, color = color, modifier = Modifier.padding(start = 4.dp))
             }
         }
+    }
+    when {
+        downloading -> Row(Modifier.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            if (pending > 0) Text("+$pending", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp))
+        }
+        pending > 0 -> FilledTonalButton(onClick = { actions.onDownloadGuideItem(item.key) },
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.padding(start = 10.dp).height(32.dp).testTag("download_item:${item.key}")) {
+            Icon(Icons.Default.Download, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.native_guide_download_all), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+    }
     }
 }
 

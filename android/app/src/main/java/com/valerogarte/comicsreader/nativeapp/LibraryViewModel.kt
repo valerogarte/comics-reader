@@ -309,11 +309,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onRefreshGuide() = publishGuide(readFolders = true, refresh = true)
 
-    /** Queues every book of one guide section that is on the server and not on the device. */
-    override fun onDownloadGuideSection(sectionIndex: Int) {
+    /** Queues every book of one guide entry that is on the server and not on the device. */
+    override fun onDownloadGuideItem(key: String) {
         val guide = mutableState.value.guide ?: return
-        val section = guide.sections.getOrNull(sectionIndex) ?: return
-        val paths = section.items.flatMap { it.files }.filter { it.bookId == null && it.available != false && !it.downloading }.map { it.path }
+        val item = guide.items.find { it.key == key } ?: return
+        downloadGuideFiles(guide, item.files)
+    }
+
+    private fun downloadGuideFiles(guide: UiGuideView, files: List<UiGuideFile>) {
+        val paths = files.filter { it.bookId == null && it.available != false && !it.downloading }.map { it.path }
         if (paths.isEmpty()) return
         viewModelScope.launch {
             try {
@@ -323,6 +327,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { report(error) }
         }
+    }
+
+    /** Queues every book of one guide section that is on the server and not on the device. */
+    override fun onDownloadGuideSection(sectionIndex: Int) {
+        val guide = mutableState.value.guide ?: return
+        val section = guide.sections.getOrNull(sectionIndex) ?: return
+        downloadGuideFiles(guide, section.items.flatMap { it.files })
     }
 
     override fun onOpenGuideFile(path: String) {
@@ -566,6 +577,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun publishRemote(serverId: String) {
+        // The guide shows which of its books are queued or downloading.
+        if (mutableState.value.destination == LibraryDestination.GUIDE) publishGuide()
         val browser = browsers[serverId] ?: return
         mutableState.update { current ->
             if (current.destination != LibraryDestination.SFTP || current.selectedSftpServerId != serverId) current
