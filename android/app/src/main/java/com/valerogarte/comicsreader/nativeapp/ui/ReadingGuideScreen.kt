@@ -214,17 +214,18 @@ private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onDownloa
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "section-arrow")
     Column(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Download state leads the header, before the title and its number.
             when {
-                downloading -> CircularProgressIndicator(Modifier.padding(start = 10.dp).size(20.dp), strokeWidth = 2.dp)
-                pending > 0 -> FilledTonalIconButton(onClick = onDownload, modifier = Modifier.padding(start = 6.dp).size(36.dp)) {
+                downloading -> CircularProgressIndicator(Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp), strokeWidth = 2.dp)
+                pending > 0 -> FilledTonalIconButton(onClick = onDownload, modifier = Modifier.padding(end = 10.dp).size(36.dp)) {
                     Icon(Icons.Default.Download, stringResource(R.string.native_guide_download_section, pending), Modifier.size(18.dp))
                 }
                 files.isNotEmpty() -> Icon(Icons.Default.DownloadDone, stringResource(R.string.native_guide_section_downloaded),
-                    tint = ReadGreen, modifier = Modifier.padding(start = 10.dp).size(20.dp))
+                    tint = ReadGreen, modifier = Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp))
             }
+            Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(Icons.Default.ExpandMore, null, Modifier.padding(start = 6.dp).rotate(rotation))
         }
         LinearProgressIndicator(progress = { if (total > 0) done.toFloat() / total else 0f }, color = ReadGreen,
