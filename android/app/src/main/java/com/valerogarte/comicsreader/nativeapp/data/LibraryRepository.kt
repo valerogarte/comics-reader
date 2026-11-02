@@ -187,7 +187,7 @@ class LibraryRepository(context: Context) : Closeable {
     suspend fun repairMissingCovers(): Boolean = withContext(Dispatchers.IO) {
         mutation.withLock {
             var repaired = false
-            database.books().filter { it.coverPath == null && it.format in comicFormats && File(it.localPath).isFile }.forEach { book ->
+            database.books().filter { it.coverPath == null && it.pageCount == 0 && it.format in comicFormats && File(it.localPath).isFile }.forEach { book ->
                 currentCoroutineContext().ensureActive()
                 val metadata = runCatching { engine.inspectLocal(privateFile(book.localPath), book.fileName) }.getOrNull() ?: return@forEach
                 val cover = metadata.cover?.let { runCatching { writeCover(File(coversDirectory, "${book.id}.jpg"), it) }.getOrNull() }
@@ -199,7 +199,7 @@ class LibraryRepository(context: Context) : Closeable {
         }
     }
 
-    suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long) = withContext(Dispatchers.IO) {
+    suspend fun saveProgress(id: String, page: Int, total: Int, readSeconds: Long = 0) = withContext(Dispatchers.IO) {
         val actualTotal = total.coerceAtLeast(0)
         database.progress(id, page.coerceIn(0, (actualTotal - 1).coerceAtLeast(0)), actualTotal, readSeconds)
     }
