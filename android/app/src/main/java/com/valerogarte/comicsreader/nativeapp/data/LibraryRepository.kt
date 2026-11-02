@@ -54,8 +54,8 @@ class LibraryRepository(context: Context) : Closeable {
     private val remoteCoversDirectory = File(root, "remote-covers").apply { ensureDirectory() }
     /** Chronology covers: never pruned by cache rebuilds or by cleaning books from the device. */
     private val historyCoversDirectory = File(root, "history-covers").apply { ensureDirectory() }
-    /** Guides dropped here (for example with adb) are imported on start and then removed. */
-    private val guidesInbox = File(appContext.filesDir, "guides-inbox")
+    /** Reading guides being fetched from a server; each file is removed once read. */
+    private val guidesDownload = File(appContext.cacheDir, "guides").apply { ensureDirectory() }
     private val database = LibraryDatabase(appContext)
     private val configuration = SftpConfigStore(appContext)
     private val engine = NativeDocumentEngine(appContext)
@@ -317,10 +317,27 @@ class LibraryRepository(context: Context) : Closeable {
     suspend fun saveGuide(guide: StoredGuide) = withContext(Dispatchers.IO) { mutation.withLock { database.saveGuide(guide) } }
     suspend fun deleteGuide(id: String) = withContext(Dispatchers.IO) { mutation.withLock { database.deleteGuide(id) } }
 
-    /** Returns the JSON texts waiting in the inbox and removes them once read. */
-    suspend fun takeInboxGuides(): List<String> = withContext(Dispatchers.IO) {
-        guidesInbox.listFiles { file -> file.isFile && file.name.endsWith(".json", ignoreCase = true) }.orEmpty()
-            .sortedBy { it.name }.mapNotNull { file -> runCatching { file.readText(Charsets.UTF_8) }.getOrNull().also { file.delete() } }
+    /** The reading guides in the profile's root folder: files named `guia_lectura_*.json`. */
+    suspend fun listRemoteGuides(profileId: String): List<SftpClient.Entry> = withContext(Dispatchers.IO) {
+        val config = captureConfig(profileId)
+        runInterruptible(Dispatchers.IO) { clientFor(profileId).listShelf(config.credentials(), config.rootPath, "/") }
+            .filter { !it.directory && GUIDE_FILE.matches(it.name) }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+    }
+
+    /** Reads one guide file of the root folder; only guides are fetched this way, never books. */
+    suspend fun readRemoteGuide(profileId: String, name: String): String = withContext(Dispatchers.IO) {
+        require(GUIDE_FILE.matches(name)) { "No es una guía de lectura" }
+        val config = captureConfig(profileId)
+        val part = File(guidesDownload, "${UUID.randomUUID()}.part")
+        try {
+            runInterruptible(Dispatchers.IO) {
+                clientFor(profileId).downloadShelf(config.credentials(), config.rootPath, "/$name", part) { transferred ->
+                    if (transferred > MAX_GUIDE_BYTES) throw IOException("La guía $name es demasiado grande")
+                }
+            }
+            part.readText(Charsets.UTF_8)
+        } finally { part.delete() }
     }
 
     suspend fun loadReadingLog() = withContext(Dispatchers.IO) { database.readingLog() }
@@ -837,6 +854,8 @@ class LibraryRepository(context: Context) : Closeable {
         private const val REMOTE_COVER_COMPATIBLE_VERSION = 11
         /** Bump when the comic cover choice changes, to renew covers of downloaded comics once. */
         private const val LOCAL_COVER_RULE = 1
+        private val GUIDE_FILE = Regex("guia_lectura_.*\\.json", RegexOption.IGNORE_CASE)
+        private const val MAX_GUIDE_BYTES = 16L * 1024 * 1024
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")

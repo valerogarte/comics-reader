@@ -47,6 +47,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     /** Remote books to open as soon as their download finishes: (source id, path). */
     private val pendingOpen = mutableSetOf<Pair<String, String>>()
     private var guideJob: Job? = null
+    private var guideSyncJob: Job? = null
+    private val guidePreferences = application.getSharedPreferences("reading-guides", 0)
+    /** Stored guides, read again with the library; parsed once per version since a guide can be megabytes. */
+    @Volatile private var storedGuides = emptyList<StoredGuide>()
+    private val parsedGuides = ConcurrentHashMap<String, Pair<Long, ReadingGuide>>()
     private class RemoteBrowser {
         var path = "/"
         var folder: RemoteFolder? = null
@@ -114,7 +119,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             try {
                 initializeJob?.join()
                 if (repository.migrateHistory()) reloadLibrary()
-                importInboxGuides()
+                syncGuides()
                 if (repository.repairMissingCovers()) reloadLibrary()
                 if (repository.refreshComicCovers()) reloadLibrary()
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -132,6 +137,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         mutableState.update { it.copy(destination = destination, selectedShelfId = shelfId, loading = false,
             highlightedPaths = emptySet(), returnGuideId = null) }
         updateBusyMessage()
+        if (destination == LibraryDestination.GUIDES) syncGuides()
         viewModelScope.launch {
             try { reloadLibrary() }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -306,10 +312,76 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         mutableState.update { it.copy(destination = LibraryDestination.GUIDE, selectedGuideId = id,
             highlightedPaths = emptySet(), returnGuideId = null,
             guide = it.guide?.takeIf { guide -> guide.id == id }) }
+        // The stored copy shows at once; the server's file is compared in the background.
         publishGuide(readFolders = true)
+        syncGuides()
     }
 
-    override fun onRefreshGuide() = publishGuide(readFolders = true, refresh = true)
+    override fun onRefreshGuide() {
+        publishGuide(readFolders = true, refresh = true)
+        syncGuides()
+    }
+
+    override fun onSyncGuides() = syncGuides()
+
+    override fun onToggleGuideFavorite(id: String) {
+        val favorites = favoriteGuides().let { if (id in it) it - id else it + id }
+        guidePreferences.edit().putStringSet("favorites", favorites).apply()
+        mutableState.update { state -> state.copy(guides = state.guides.map { it.copy(favorite = it.id in favorites) }) }
+    }
+
+    private fun favoriteGuides(): Set<String> = guidePreferences.getStringSet("favorites", null).orEmpty().toSet()
+
+    /**
+     * Guides are the `guia_lectura_*.json` files of each server's root folder. A file whose size
+     * and date are unchanged is not read again; guides whose file is gone are removed once that
+     * server answered. Offline, the stored guides stay as they are.
+     */
+    private fun syncGuides() {
+        if (guideSyncJob?.isActive == true) return
+        guideSyncJob = viewModelScope.launch {
+            mutableState.update { it.copy(guidesSyncing = true) }
+            try {
+                val servers = mutableState.value.settings.sftpServers.map { it.id }
+                val stored = repository.loadGuides()
+                val listed = HashSet<String>()
+                val kept = HashSet<String>()
+                val changed = HashSet<String>()
+                for (profile in servers) {
+                    val files = try { repository.listRemoteGuides(profile) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { continue }
+                    listed += profile
+                    for (file in files) {
+                        val path = "/${file.name}"
+                        val id = "sftp:$profile:$path"
+                        kept += id
+                        val old = stored.find { it.id == id }
+                        if (old != null && old.remoteSize == file.size && old.remoteModified == file.modifiedMillis) continue
+                        // A file that cannot be read or parsed leaves the previous version in place.
+                        try {
+                            val text = repository.readRemoteGuide(profile, file.name)
+                            val guide = withContext(Dispatchers.Default) { GuideJson.parse(text) }
+                            repository.saveGuide(StoredGuide(id, guide.title, text, System.currentTimeMillis(), profile, path,
+                                file.size, file.modifiedMillis))
+                            changed += id
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { }
+                    }
+                }
+                if (listed.isNotEmpty()) stored.filter { guide ->
+                    guide.id !in kept && (guide.profileId == null || guide.profileId in listed || guide.profileId !in servers)
+                }.forEach { repository.deleteGuide(it.id); changed += it.id }
+                if (changed.isNotEmpty()) {
+                    reloadLibrary()
+                    val state = mutableState.value
+                    if (state.destination == LibraryDestination.GUIDE && state.selectedGuideId in changed) publishGuide(readFolders = true)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { }
+            finally { mutableState.update { it.copy(guidesSyncing = false) } }
+        }
+    }
 
     /** Opens the server folder that holds a guide entry and highlights its books there. */
     override fun onRevealGuideItem(key: String) {
@@ -376,30 +448,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    override fun onDeleteGuide(id: String) {
-        launchOperation {
-            repository.deleteGuide(id)
-            mutableState.update { if (it.selectedGuideId == id) it.copy(destination = LibraryDestination.BOOKS, selectedGuideId = null, guide = null) else it }
-            reloadLibrary()
-        }
-    }
-
-    fun importGuide(uri: Uri) {
-        launchOperation("Importando guía") {
-            val text = withContext(Dispatchers.IO) {
-                getApplication<Application>().contentResolver.openInputStream(uri).use { input ->
-                    requireNotNull(input) { "No se puede abrir el archivo" }
-                    val bytes = input.readBytes()
-                    require(bytes.size <= 8 * 1024 * 1024) { "La guía es demasiado grande" }
-                    bytes.toString(Charsets.UTF_8)
-                }
-            }
-            val guide = saveGuideText(text)
-            reloadLibrary()
-            onOpenGuide(guide.id)
-        }
-    }
-
     fun exportGuide(id: String, uri: Uri) {
         launchOperation("Exportando guía") {
             val stored = repository.loadGuides().find { it.id == id } ?: throw IOException("La guía ya no existe")
@@ -415,28 +463,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun guideTitle(id: String): String? = mutableState.value.guides.find { it.id == id }?.title
 
-    private suspend fun saveGuideText(text: String): ReadingGuide {
-        val guide = withContext(Dispatchers.Default) { GuideJson.parse(text) }
-        repository.saveGuide(StoredGuide(guide.id, guide.title, GuideJson.write(guide), System.currentTimeMillis()))
+    private suspend fun parsedGuide(stored: StoredGuide): ReadingGuide? {
+        parsedGuides[stored.id]?.takeIf { it.first == stored.updatedAt }?.let { return it.second }
+        val guide = try { withContext(Dispatchers.Default) { GuideJson.parse(stored.json) } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { return null }
+        parsedGuides[stored.id] = stored.updatedAt to guide
         return guide
-    }
-
-    private suspend fun importInboxGuides() {
-        val texts = repository.takeInboxGuides()
-        if (texts.isEmpty()) return
-        var imported = 0
-        texts.forEach { text -> try { saveGuideText(text); imported++ } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { } }
-        reloadLibrary()
-        if (imported > 0) mutableState.update { it.copy(message = if (imported == 1) "1 guía de lectura importada" else "$imported guías de lectura importadas") }
     }
 
     private data class GuideContext(val guide: ReadingGuide, val profile: String?, val sourceId: String?, val root: String)
 
     private suspend fun loadGuideContext(id: String): GuideContext? {
-        val stored = repository.loadGuides().find { it.id == id } ?: return null
-        val guide = withContext(Dispatchers.Default) { GuideJson.parse(stored.json) }
+        val stored = storedGuides.find { it.id == id } ?: return null
+        val guide = parsedGuide(stored) ?: return null
         val servers = mutableState.value.settings.sftpServers
-        val server = guide.server?.let { name -> servers.find { it.name.equals(name, true) || it.host.equals(name, true) } } ?: servers.firstOrNull()
+        // A guide belongs to the server it was read from; "server" in the JSON is only a fallback.
+        val server = servers.find { it.id == stored.profileId }
+            ?: guide.server?.let { name -> servers.find { it.name.equals(name, true) || it.host.equals(name, true) } } ?: servers.firstOrNull()
         val root = server?.let { repository.serverRoot(it.id) }
         return GuideContext(guide, server?.id, root?.first, root?.second ?: "/")
     }
@@ -528,11 +572,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     files.all { it.available == false } -> GuideItemStatus.MISSING
                     else -> GuideItemStatus.UNKNOWN
                 }
-                UiGuideItem(item.key, item.number, item.title, item.detail, item.scope, item.priority, item.note, files, status)
+                UiGuideItem(item.key, item.number, item.title, item.detail, item.scope, item.priority, item.note, files, status,
+                    item.readingMinutes)
             })
         }
         val serverName = context.profile?.let(::serverName)
-        return UiGuideView(context.guide.id, context.guide.title, context.guide.description, serverName, sections, checking)
+        val minutes = context.guide.readingMinutes ?: context.guide.items.mapNotNull { it.readingMinutes }.takeIf { it.isNotEmpty() }?.sum()
+        return UiGuideView(id, context.guide.title, context.guide.description, serverName, sections, checking, minutes)
     }
 
     override fun onDeleteShelf(id: String) {
@@ -1140,8 +1186,16 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val readingLog = repository.loadReadingLog()
         val shelves = repository.loadShelves().map { UiShelf(it.name, it.name) }
         val paths = repository.loadShelfPaths()
-        val guides = repository.loadGuides().map { stored ->
-            UiGuideSummary(stored.id, stored.title, runCatching { GuideJson.parse(stored.json).items.size }.getOrDefault(0))
+        val stored = repository.loadGuides()
+        storedGuides = stored
+        parsedGuides.keys.retainAll(stored.mapTo(HashSet()) { it.id })
+        val favorites = favoriteGuides()
+        val guides = stored.map { guide ->
+            val parsed = parsedGuide(guide)
+            UiGuideSummary(guide.id, guide.title, parsed?.items?.size ?: 0, parsed?.description.orEmpty(),
+                parsed?.let { it.readingMinutes ?: it.items.mapNotNull { item -> item.readingMinutes }.takeIf { m -> m.isNotEmpty() }?.sum() },
+                favorite = guide.id in favorites, fileName = guide.remotePath?.substringAfterLast('/'),
+                serverName = guide.profileId?.let(::serverName))
         }
         val downloads = withContext(Dispatchers.IO) {
             loadedBooks.filter { it.sourceId != null && it.remotePath != null && File(it.localPath).isFile }
@@ -1159,7 +1213,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 selectedGuideId = selectedGuide,
                 destination = when {
                     it.destination == LibraryDestination.SHELF && selectedShelf == null -> LibraryDestination.BOOKS
-                    it.destination == LibraryDestination.GUIDE && selectedGuide == null -> LibraryDestination.BOOKS
+                    it.destination == LibraryDestination.GUIDE && selectedGuide == null -> LibraryDestination.GUIDES
                     else -> it.destination
                 },
                 books = loadedBooks.map { book -> UiBook(book.id, book.title, book.format, book.size, book.coverPath, listOfNotNull(book.shelfName),

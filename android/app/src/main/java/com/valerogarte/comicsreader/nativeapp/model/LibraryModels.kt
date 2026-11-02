@@ -53,8 +53,20 @@ data class ShelfPath(
     val path: String,
 )
 
-/** A reading guide as stored: its JSON is the source of truth, so import and export are lossless. */
-data class StoredGuide(val id: String, val title: String, val json: String, val updatedAt: Long)
+/**
+ * A reading guide as stored: the JSON read from a `guia_lectura_*.json` file in a server's root
+ * folder, kept as is so export is lossless. Size and date tell whether the file changed.
+ */
+data class StoredGuide(
+    val id: String,
+    val title: String,
+    val json: String,
+    val updatedAt: Long,
+    val profileId: String? = null,
+    val remotePath: String? = null,
+    val remoteSize: Long = 0,
+    val remoteModified: Long = 0,
+)
 
 data class SftpConfig(
     val host: String,

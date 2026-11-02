@@ -20,7 +20,9 @@ La aplicación es exclusivamente Android nativa: Kotlin, Jetpack Compose, SQLite
 - El perfil NAS inicial procede de `android/sftp-default.local.json`, ignorado por Git. Nunca emitir ni versionar sus credenciales. Sembrar solo una vez; respetar su eliminación posterior.
 - Una descarga SFTP añade el libro a Libros.
 - Una estantería es una carpeta de un servidor SFTP añadida desde esa carpeta («Añadir a estanterías»). Con servidor abre la carpeta; sin conexión muestra los libros descargados bajo esa ruta.
-- Guías de lectura: JSON importable/exportable (`model/ReadingGuide.kt`) con secciones y entradas que apuntan a archivos del servidor sin copiarlos; una entrada sin archivos disponibles se muestra como pendiente de obtener. Los JSON dejados en `files/guides-inbox` se importan al arrancar.
+- Guías de lectura: son los ficheros `guia_lectura_*.json` de la carpeta principal (raíz del perfil) de cada servidor SFTP; no hay importación manual. Formato en `model/ReadingGuide.kt`: secciones y entradas que apuntan a archivos del servidor sin copiarlos; una entrada sin archivos disponibles se muestra como pendiente de obtener. `tiempo_aproximado_lectura` (minutos, en la guía y en cada entrada) se muestra en la app.
+- Las guías se abren desde la copia guardada y en segundo plano se compara tamaño y fecha del fichero del servidor; solo se vuelve a leer si cambió. Una guía cuyo fichero desaparece se quita cuando ese servidor responde.
+- El menú lateral muestra solo las guías favoritas y «Todas las guías», el listado donde se marcan favoritas y se entra al detalle.
 - Limpiar del dispositivo es definitivo (no hay papelera), pero la cronología conserva su portada (`history-covers`) y el origen SFTP del libro para volver a descargarlo y abrirlo.
 - Ajustes limitados a apariencia, fuentes, lectura, SFTP e inteligencia artificial (proveedor y modelo; sin funciones que los usen todavía).
 - Configuración desde la cabecera; el pie del menú lateral abre Estadísticas de lectura.

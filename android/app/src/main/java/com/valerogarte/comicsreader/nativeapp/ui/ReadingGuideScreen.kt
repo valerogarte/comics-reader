@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,7 +21,9 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -55,8 +59,10 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
         return
     }
     var filter by rememberSaveable(guide.id) { mutableStateOf(GuideFilter.ALL) }
-    // Only the section being read starts open; the user's own toggles are kept.
-    val collapsed = remember(guide.id) { mutableStateMapOf<Int, Boolean>() }
+    // Only the section being read starts open; the user's own toggles are kept, also while a
+    // book or a server folder is shown, so Back returns to the same section and scroll.
+    val collapsed = rememberSaveable(guide.id, saver = sectionToggles) { mutableStateMapOf() }
+    val listState = rememberLazyListState()
     val items = guide.items
     val read = items.count { it.status == GuideItemStatus.READ }
     val missing = items.count { it.status == GuideItemStatus.MISSING }
@@ -64,7 +70,7 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
     val next = items.firstOrNull { it.status == GuideItemStatus.READING }
         ?: items.firstOrNull { it.status == GuideItemStatus.AVAILABLE || it.status == GuideItemStatus.PARTIAL }
     val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === next } }
-    LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), contentPadding = PaddingValues(bottom = 32.dp)) {
+    LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "hero") { GuideHero(guide, read, available, missing, items.size) }
         if (guide.checking) item(key = "checking") {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -107,6 +113,76 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
     }
 }
 
+/** Section index to "collapsed", saved as a flat list of pairs. */
+private val sectionToggles = listSaver<SnapshotStateMap<Int, Boolean>, Int>(
+    save = { toggles -> toggles.flatMap { (index, closed) -> listOf(index, if (closed) 1 else 0) } },
+    restore = { saved -> mutableStateMapOf<Int, Boolean>().apply { saved.chunked(2).forEach { (index, closed) -> put(index, closed == 1) } } },
+)
+
+/** An approximate time: minutes up to an hour, then hours and minutes, then whole hours. */
+internal fun readingTime(minutes: Int): String = when {
+    minutes < 60 -> "$minutes min"
+    minutes < 600 -> {
+        val rest = (minutes % 60 + 2) / 5 * 5
+        if (rest == 0 || rest == 60) "${(minutes + 30) / 60} h" else "${minutes / 60} h $rest min"
+    }
+    else -> "${(minutes + 30) / 60} h"
+}
+
+/** Every reading guide of the servers, with a star to show it in the side menu. */
+@Composable
+internal fun ReadingGuideList(guides: List<UiGuideSummary>, syncing: Boolean, actions: AppActions, modifier: Modifier = Modifier) {
+    LazyColumn(modifier.fillMaxSize().testTag("reading_guides"), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (syncing) item(key = "syncing") {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                Text(stringResource(R.string.native_guides_syncing), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp))
+            }
+        }
+        if (guides.isEmpty() && !syncing) item(key = "empty") {
+            Column(Modifier.fillMaxWidth().padding(top = 96.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.AutoStories, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.native_guides_empty), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+                Text(stringResource(R.string.native_guides_empty_detail), style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+        items(guides, key = { it.id }) { guide -> GuideCard(guide, actions) }
+    }
+}
+
+@Composable
+private fun GuideCard(guide: UiGuideSummary, actions: AppActions) {
+    val primary = MaterialTheme.colorScheme.primary
+    ElevatedCard(onClick = { actions.onOpenGuide(guide.id) }, shape = RoundedCornerShape(22.dp),
+        modifier = Modifier.fillMaxWidth().testTag("guide_card:${guide.id}")) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
+                .background(Brush.linearGradient(listOf(lerp(primary, Color.Black, .45f), primary))), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.AutoStories, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(guide.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (guide.description.isNotBlank()) Text(guide.description, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill(stringResource(R.string.native_guide_entries, guide.itemCount), primary)
+                    guide.readingMinutes?.let { Pill("≈ ${readingTime(it)}", MaterialTheme.colorScheme.secondary) }
+                    guide.fileName?.let { Pill(listOfNotNull(guide.serverName, it).joinToString(" · "), MaterialTheme.colorScheme.outline) }
+                }
+            }
+            IconButton(onClick = { actions.onToggleGuideFavorite(guide.id) }, modifier = Modifier.testTag("favorite:${guide.id}")) {
+                Icon(if (guide.favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    stringResource(if (guide.favorite) R.string.native_guide_unfavorite else R.string.native_guide_favorite),
+                    tint = if (guide.favorite) ReadingAmber else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
 private val GuideFilter.label get() = when (this) {
     GuideFilter.ALL -> R.string.native_all
     GuideFilter.TO_READ -> R.string.native_guide_to_read
@@ -144,6 +220,16 @@ private fun GuideHero(guide: UiGuideView, read: Int, available: Int, missing: In
                     maxLines = 3, overflow = TextOverflow.Ellipsis)
                 if (guide.description.isNotBlank()) Text(guide.description, style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = .85f), maxLines = 4, overflow = TextOverflow.Ellipsis)
+                guide.readingMinutes?.let { minutes ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Schedule, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        val left = guide.remainingMinutes?.takeIf { it < minutes && readingTime(it) != readingTime(minutes) }
+                        Text(listOfNotNull(stringResource(R.string.native_guide_time, readingTime(minutes)),
+                            left?.let { stringResource(R.string.native_guide_time_left, readingTime(it)) }).joinToString(" · "),
+                            style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color.White,
+                            modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
                 Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HeroStat(Icons.Default.DoneAll, "$read")
                     HeroStat(Icons.AutoMirrored.Filled.MenuBook, "$available")
@@ -225,6 +311,8 @@ private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onDownloa
             }
             Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
+            section.readingMinutes?.let { Text("≈ ${readingTime(it)} · ", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(Icons.Default.ExpandMore, null, Modifier.padding(start = 6.dp).rotate(rotation))
         }
@@ -270,6 +358,7 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                     Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         StatusChip(item.status)
                         if (item.priority.isNotBlank()) PriorityChip(item.priority)
+                        item.readingMinutes?.let { Pill("≈ ${readingTime(it)}", MaterialTheme.colorScheme.secondary) }
                     }
                     if (item.detail.isNotBlank()) WhyRead(item.detail)
                     if (item.files.size > 1) FileStrip(item, actions)

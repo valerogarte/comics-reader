@@ -16,7 +16,7 @@ import com.valerogarte.comicsreader.nativeapp.model.ShelfPath
 import com.valerogarte.comicsreader.nativeapp.model.StoredGuide
 
 /** The native library has its own database; it never opens or migrates browser storage. */
-internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 5) {
+internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "native-library.sqlite", null, 6) {
     init { setWriteAheadLoggingEnabled(true) }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -50,10 +50,11 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         db.execSQL("CREATE INDEX remote_parent ON remote_entries(source_id,parent_path)")
         createReadingLog(db)
         upgradeToV5(db)
+        upgradeToV6(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion in 1..4 && newVersion == 5) { "Unsupported native library database version" }
+        check(oldVersion in 1..5 && newVersion == 6) { "Unsupported native library database version" }
         // Nullable/defaulted additions preserve every book, shelf, cached entry and thumbnail.
         if (oldVersion < 2) db.execSQL("ALTER TABLE remote_entries ADD COLUMN file_count INTEGER")
         if (oldVersion < 3) db.execSQL("ALTER TABLE remote_entries ADD COLUMN preview_version INTEGER NOT NULL DEFAULT 0")
@@ -63,6 +64,7 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             db.execSQL("UPDATE books SET reading_status='UNREAD' WHERE reading_status='READING' AND current_page=0")
         }
         if (oldVersion < 5) upgradeToV5(db)
+        if (oldVersion < 6) upgradeToV6(db)
     }
 
     /** Chronology covers and origins, shelves as server folders, and reading guides. */
@@ -76,6 +78,14 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
             UNIQUE(profile_id,path))""")
         db.execSQL("""CREATE TABLE reading_guides(
             id TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL, json TEXT NOT NULL, updated_at INTEGER NOT NULL)""")
+    }
+
+    /** Guides come from the server: each row remembers its file, and size and date to spot changes. */
+    private fun upgradeToV6(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE reading_guides ADD COLUMN profile_id TEXT")
+        db.execSQL("ALTER TABLE reading_guides ADD COLUMN remote_path TEXT")
+        db.execSQL("ALTER TABLE reading_guides ADD COLUMN remote_size INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE reading_guides ADD COLUMN remote_modified INTEGER NOT NULL DEFAULT 0")
     }
 
     /**
@@ -258,13 +268,16 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
     fun deleteShelfPath(id: String) { writableDatabase.delete("shelf_paths", "id=?", arrayOf(id)) }
 
     fun guides(): List<StoredGuide> = readableDatabase.rawQuery(
-        "SELECT * FROM reading_guides ORDER BY title COLLATE NOCASE", null,
+        "SELECT * FROM reading_guides ORDER BY remote_path COLLATE NOCASE, title COLLATE NOCASE", null,
     ).use { cursor -> buildList { while (cursor.moveToNext()) add(StoredGuide(cursor.string("id"), cursor.string("title"),
-        cursor.string("json"), cursor.long("updated_at"))) } }
+        cursor.string("json"), cursor.long("updated_at"), cursor.optional("profile_id"), cursor.optional("remote_path"),
+        cursor.long("remote_size"), cursor.long("remote_modified"))) } }
 
     fun saveGuide(guide: StoredGuide) {
         writableDatabase.insertWithOnConflict("reading_guides", null, ContentValues().apply {
             put("id", guide.id); put("title", guide.title); put("json", guide.json); put("updated_at", guide.updatedAt)
+            put("profile_id", guide.profileId); put("remote_path", guide.remotePath)
+            put("remote_size", guide.remoteSize); put("remote_modified", guide.remoteModified)
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 

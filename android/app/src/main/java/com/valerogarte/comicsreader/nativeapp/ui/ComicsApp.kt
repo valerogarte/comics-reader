@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
@@ -144,6 +145,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     val server = state.settings.sftpServers.find { it.id == state.selectedSftpServerId }
     val shelfPath = state.shelfPaths.find { it.id == state.selectedShelfId }
     val isGuide = state.destination == LibraryDestination.GUIDE
+    val isGuideList = state.destination == LibraryDestination.GUIDES
+    // Each guide keeps its open sections and scroll while a book or a server folder is shown.
+    val guideStates = rememberSaveableStateHolder()
     val localBooks = if (state.destination == LibraryDestination.SHELF && shelfPath != null) state.books.filter { book ->
         val path = book.remotePath
         book.sourceId == shelfPath.sourceId && path != null && (shelfPath.path == "/" || path.startsWith(shelfPath.path.trimEnd('/') + "/"))
@@ -155,9 +159,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
         LibraryDestination.BOOKS -> stringResource(R.string.native_books)
         LibraryDestination.SFTP -> server?.name ?: stringResource(R.string.native_sftp_library)
         LibraryDestination.SHELF -> shelfPath?.name ?: stringResource(R.string.native_shelves)
+        LibraryDestination.GUIDES -> stringResource(R.string.native_reading_guides)
         LibraryDestination.GUIDE -> state.guide?.title ?: state.guides.find { it.id == state.selectedGuideId }?.title ?: stringResource(R.string.native_reading_guides)
     }
-    var pendingGuideDelete by remember { mutableStateOf<String?>(null) }
     var pendingShelfDelete by remember { mutableStateOf<UiShelfPath?>(null) }
     val collectionKey = "${state.destination}:${state.selectedShelfId}:${state.selectedSftpServerId}:${state.remotePath}:$filter"
     val totalItems = if (isRemote) folders.size + remoteBooks.size else visibleBooks.size
@@ -322,19 +326,25 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         }
                 item {
                 HorizontalDivider(Modifier.padding(20.dp))
-                Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.native_reading_guides), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { actions.onImportGuide(); scope.launch { drawer.close() } }, modifier = Modifier.testTag("import_guide")) {
-                        Icon(Icons.Default.FileOpen, stringResource(R.string.native_import_guide))
-                    }
+                Text(stringResource(R.string.native_reading_guides), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 28.dp, end = 16.dp, bottom = 4.dp))
+                NavigationDrawerItem(
+                    label = { Text(stringResource(R.string.native_all_guides)) },
+                    icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) },
+                    badge = { if (state.guides.isNotEmpty()) Text("${state.guides.size}", style = MaterialTheme.typography.labelMedium) },
+                    selected = isGuideList,
+                    onClick = { actions.onNavigate(LibraryDestination.GUIDES); scope.launch { drawer.close() } },
+                    modifier = Modifier.padding(horizontal = 12.dp).testTag("all_guides"),
+                )
+                if (state.guides.isNotEmpty() && state.guides.none { it.favorite }) Text(stringResource(R.string.native_guides_favorites_hint),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
                 }
-                if (state.guides.isEmpty()) Text(stringResource(R.string.native_guides_empty_hint), style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
-                }
-                        items(state.guides, key = { "guide:${it.id}" }) { item ->
+                        // Only favourites here; the full list, with the stars, is "Todas las guías".
+                        items(state.guides.filter { it.favorite }, key = { "guide:${it.id}" }) { item ->
                             NavigationDrawerItem(
                                 label = { Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                                icon = { Icon(Icons.Default.AutoStories, null) },
+                                icon = { Icon(Icons.Default.Star, null) },
                                 badge = { Text("${item.itemCount}", style = MaterialTheme.typography.labelMedium) },
                                 selected = isGuide && item.id == state.selectedGuideId,
                                 onClick = { actions.onOpenGuide(item.id); scope.launch { drawer.close() } },
@@ -402,15 +412,22 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                             }
                         } else if (isGuide) {
                             val guideId = state.selectedGuideId
+                            val favorite = state.guides.find { it.id == guideId }?.favorite == true
+                            if (guideId != null) IconButton(onClick = { actions.onToggleGuideFavorite(guideId) }) {
+                                Icon(if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                                    stringResource(if (favorite) R.string.native_guide_unfavorite else R.string.native_guide_favorite))
+                            }
                             IconButton(onClick = actions::onRefreshGuide, enabled = state.guide?.checking != true) {
                                 Icon(Icons.Default.Sync, stringResource(R.string.native_sync))
                             }
                             if (guideId != null) IconButton(onClick = { actions.onExportGuide(guideId) }) {
                                 Icon(Icons.Default.IosShare, stringResource(R.string.native_export_guide))
                             }
-                            if (guideId != null) IconButton(onClick = { pendingGuideDelete = guideId }) {
-                                Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_guide))
+                        } else if (isGuideList) {
+                            IconButton(onClick = actions::onSyncGuides, enabled = !state.guidesSyncing) {
+                                Icon(Icons.Default.Sync, stringResource(R.string.native_sync))
                             }
+                            IconButton(onClick = actions::onShowSettings) { Icon(Icons.Default.Settings, stringResource(R.string.native_settings)) }
                         } else {
                             if (isRemote) IconButton(onClick = actions::onSyncRemote, enabled = server != null && !state.loading) {
                                 Icon(Icons.Default.Sync, stringResource(R.string.native_sync))
@@ -423,7 +440,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 )
             },
             bottomBar = {
-                if (!isGuide) LibraryFooter(
+                if (!isGuide && !isGuideList) LibraryFooter(
                     count = if (isRemote) if (server != null) state.remoteEntries.count { !it.isDirectory } else 0 else localBooks.size,
                     filter = filter, onFilter = { filter = it }, layout = layout,
                     onLayout = { layout = it }, coverSize = coverSize,
@@ -449,8 +466,10 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 // still reaches the book under the finger.
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                 val empty = if (isRemote) remoteBooks.isEmpty() && folders.isEmpty() else visibleBooks.isEmpty()
-                if (isGuide) {
-                    ReadingGuideContent(state.guide, actions)
+                if (isGuideList) {
+                    ReadingGuideList(state.guides, state.guidesSyncing, actions)
+                } else if (isGuide) {
+                    guideStates.SaveableStateProvider("guide:${state.selectedGuideId}") { ReadingGuideContent(state.guide, actions) }
                 } else if (isRemote && state.settings.sftpServers.isEmpty()) {
                     EmptyLibrary(Icons.Default.Storage, stringResource(R.string.native_configure_sftp), stringResource(R.string.native_configure_sftp_detail), actions::onShowSettings, R.string.native_configure_sftp)
                 } else if (isRemote && server == null) {
@@ -532,16 +551,6 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     }
     if (statisticsVisible) ReadingStatisticsScreen(state.readingStatistics, onClose = { statisticsVisible = false },
         onOpenEntry = { statisticsVisible = false; actions.onOpenTimelineEntry(it) })
-    pendingGuideDelete?.let { id ->
-        AlertDialog(
-            onDismissRequest = { pendingGuideDelete = null },
-            icon = { Icon(Icons.Default.DeleteOutline, null) },
-            title = { Text(stringResource(R.string.native_delete_guide)) },
-            text = { Text(stringResource(R.string.native_delete_guide_message)) },
-            confirmButton = { TextButton(onClick = { actions.onDeleteGuide(id); pendingGuideDelete = null }) { Text(stringResource(R.string.native_delete), color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { pendingGuideDelete = null }) { Text(stringResource(R.string.native_cancel)) } },
-        )
-    }
     pendingShelfDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { pendingShelfDelete = null },

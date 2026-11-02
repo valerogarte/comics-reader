@@ -3,7 +3,8 @@ package com.valerogarte.comicsreader.nativeapp.ui
 import android.graphics.Bitmap
 import com.valerogarte.comicsreader.nativeapp.reader.ReadingFonts
 
-enum class LibraryDestination { BOOKS, SFTP, SHELF, GUIDE }
+/** GUIDES lists every reading guide; GUIDE is one guide in detail. */
+enum class LibraryDestination { BOOKS, SFTP, SHELF, GUIDES, GUIDE }
 enum class ReadFilter { ALL, UNREAD, READING, FINISHED }
 enum class LibraryLayout { GRID, LIST }
 enum class ReaderMode { HORIZONTAL, VERTICAL }
@@ -26,7 +27,17 @@ data class UiShelf(val id: String, val name: String)
 /** A shelf is a server folder; offline it lists the downloaded books under it. */
 data class UiShelfPath(val id: String, val name: String, val serverId: String, val sourceId: String, val path: String)
 
-data class UiGuideSummary(val id: String, val title: String, val itemCount: Int)
+data class UiGuideSummary(
+    val id: String,
+    val title: String,
+    val itemCount: Int,
+    val description: String = "",
+    val readingMinutes: Int? = null,
+    val favorite: Boolean = false,
+    /** The guide's file in the server's root folder. */
+    val fileName: String? = null,
+    val serverName: String? = null,
+)
 
 enum class GuideItemStatus { READ, READING, AVAILABLE, PARTIAL, MISSING, UNKNOWN }
 
@@ -51,12 +62,15 @@ data class UiGuideItem(
     val note: String,
     val files: List<UiGuideFile>,
     val status: GuideItemStatus,
+    val readingMinutes: Int? = null,
 ) {
     val coverPath get() = files.firstNotNullOfOrNull { it.coverPath }
     val progress get() = if (files.isEmpty()) 0f else files.sumOf { it.progress.toDouble() }.toFloat() / files.size
 }
 
-data class UiGuideSection(val title: String, val items: List<UiGuideItem>)
+data class UiGuideSection(val title: String, val items: List<UiGuideItem>) {
+    val readingMinutes get() = items.mapNotNull { it.readingMinutes }.takeIf { it.isNotEmpty() }?.sum()
+}
 
 data class UiGuideView(
     val id: String,
@@ -65,8 +79,13 @@ data class UiGuideView(
     val serverName: String?,
     val sections: List<UiGuideSection>,
     val checking: Boolean = false,
+    /** The guide's own estimate in minutes, or the sum of its entries. */
+    val readingMinutes: Int? = null,
 ) {
     val items get() = sections.flatMap { it.items }
+    /** Minutes still to read: entries not finished, less what is read of those begun. */
+    val remainingMinutes get() = items.mapNotNull { item -> item.readingMinutes?.let { it * (1f - item.progress.coerceIn(0f, 1f)) } }
+        .takeIf { it.isNotEmpty() }?.sum()?.toInt()
 }
 
 data class UiReadingStatistics(
@@ -159,6 +178,8 @@ data class AppUiState(
     val shelves: List<UiShelf> = emptyList(),
     val shelfPaths: List<UiShelfPath> = emptyList(),
     val guides: List<UiGuideSummary> = emptyList(),
+    /** Guide files are being compared with the servers' root folders. */
+    val guidesSyncing: Boolean = false,
     val selectedGuideId: String? = null,
     val guide: UiGuideView? = null,
     val destination: LibraryDestination = LibraryDestination.BOOKS,
@@ -190,6 +211,8 @@ internal fun remoteParentPath(path: String): String =
 internal fun AppUiState.navigateLibraryBack(actions: AppActions) {
     if (destination == LibraryDestination.SFTP && returnGuideId != null) {
         actions.onOpenGuide(returnGuideId)
+    } else if (destination == LibraryDestination.GUIDE) {
+        actions.onNavigate(LibraryDestination.GUIDES)
     } else if (destination == LibraryDestination.SFTP && remotePath != "/") {
         actions.onOpenRemoteFolder(remoteParentPath(remotePath))
     } else actions.onNavigate(LibraryDestination.BOOKS)
@@ -215,8 +238,8 @@ interface AppActions {
     fun onDownloadGuideSection(sectionIndex: Int) {}
     fun onDownloadGuideItem(key: String) {}
     fun onRevealGuideItem(key: String) {}
-    fun onDeleteGuide(id: String) {}
-    fun onImportGuide() {}
+    fun onToggleGuideFavorite(id: String) {}
+    fun onSyncGuides() {}
     fun onExportGuide(id: String) {}
     fun onCreateShelf(name: String) {}
     fun onAddBooksToShelf(ids: List<String>, name: String) {}
