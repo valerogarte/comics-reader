@@ -459,7 +459,7 @@ private fun BookTile(
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(fileDetails(format, size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                FileDetails(format, size, MaterialTheme.typography.labelSmall, Modifier.padding(top = 4.dp))
             }
             BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead, queued, onRead)
         }
@@ -480,7 +480,7 @@ private fun BookListRow(
             CoverImage(coverPath, title, Modifier.size(width = 54.dp, height = 81.dp).clip(RoundedCornerShape(4.dp)))
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(fileDetails(format, size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                FileDetails(format, size, MaterialTheme.typography.bodySmall, Modifier.padding(top = 6.dp))
                 if (progress > 0f) LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp), color = DownloadGreen)
             }
             if (selected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
@@ -618,15 +618,39 @@ private fun matchesFilter(progress: Float, filter: ReadFilter) = when (filter) {
 
 private fun toggleSelection(selected: Set<String>, id: String) = if (id in selected) selected - id else selected + id
 
-private fun fileDetails(format: String, bytes: Long): String {
+/** The size always shows its unit: in narrow tiles the format gives way first. */
+@Composable
+private fun FileDetails(format: String, bytes: Long, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier) {
     val extension = format.trimStart('.').uppercase()
-    if (bytes <= 0) return extension
-    val units = arrayOf("B", "KB", "MB", "GB")
+    val size = fileSize(bytes)
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    // The format is shown only when it fits whole next to the size.
+    androidx.compose.ui.layout.Layout({
+        if (extension.isNotBlank()) Text(if (size == null) extension else "$extension · ", style = style, color = color, maxLines = 1, softWrap = false)
+        if (size != null) Text(size, style = style, color = color, maxLines = 1, softWrap = false)
+    }, modifier.fillMaxWidth()) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, maxWidth = androidx.compose.ui.unit.Constraints.Infinity)
+        val placeables = measurables.map { it.measure(loose) }
+        val sizeText = if (size != null) placeables.last() else null
+        val formatText = if (extension.isNotBlank()) placeables.first() else null
+        val showFormat = formatText != null && formatText.width + (sizeText?.width ?: 0) <= constraints.maxWidth
+        val height = placeables.maxOf { it.height }
+        layout(constraints.maxWidth, height) {
+            var x = 0
+            if (showFormat) { formatText!!.placeRelative(0, 0); x = formatText.width }
+            sizeText?.placeRelative(x, 0)
+        }
+    }
+}
+
+private fun fileSize(bytes: Long): String? {
+    if (bytes <= 0) return null
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
     var value = bytes.toDouble()
     var unit = 0
     while (value >= 1024 && unit < units.lastIndex) { value /= 1024; unit++ }
-    val size = "${DecimalFormat(if (value < 10 && unit > 0) "0.#" else "0").format(value)} ${units[unit]}"
-    return if (extension.isBlank()) size else "$extension · $size"
+    // A non-breaking space keeps the number and its unit together.
+    return "${DecimalFormat(if (value < 10 && unit > 0) "0.#" else "0").format(value)}\u00A0${units[unit]}"
 }
 
 internal fun readerBackground(settings: UiSettings, dark: Boolean): Color = if (dark) Color(0xFF181715) else when (settings.background) {
