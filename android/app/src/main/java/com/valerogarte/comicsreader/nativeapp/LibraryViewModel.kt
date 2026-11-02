@@ -309,6 +309,22 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onRefreshGuide() = publishGuide(readFolders = true, refresh = true)
 
+    /** Queues every book of one guide section that is on the server and not on the device. */
+    override fun onDownloadGuideSection(sectionIndex: Int) {
+        val guide = mutableState.value.guide ?: return
+        val section = guide.sections.getOrNull(sectionIndex) ?: return
+        val paths = section.items.flatMap { it.files }.filter { it.bookId == null && it.available != false && !it.downloading }.map { it.path }
+        if (paths.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val context = loadGuideContext(guide.id) ?: return@launch
+                val profile = context.profile ?: throw IOException("Configura el servidor SFTP de la guía «${guide.title}»")
+                paths.forEach { downloadPath(profile, it, open = false) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { report(error) }
+        }
+    }
+
     override fun onOpenGuideFile(path: String) {
         val guideId = mutableState.value.selectedGuideId ?: return
         viewModelScope.launch {

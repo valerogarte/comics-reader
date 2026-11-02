@@ -205,6 +205,8 @@
     <string name="native_guide_status_partial">Parcial</string>
     <string name="native_guide_status_missing">Pendiente de obtener</string>
     <string name="native_guide_status_unknown">Sin comprobar</string>
+    <string name="native_guide_download_section">Descargar los %1$d cómics de esta sección</string>
+    <string name="native_guide_section_downloaded">Sección descargada</string>
     <string name="native_reopen_from_server">Se descargará de nuevo del servidor</string>
     <plurals name="native_chronology_count">
         <item quantity="one">%d lectura</item>

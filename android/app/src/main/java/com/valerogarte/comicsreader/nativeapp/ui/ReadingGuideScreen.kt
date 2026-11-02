@@ -55,6 +55,7 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
         return
     }
     var filter by rememberSaveable(guide.id) { mutableStateOf(GuideFilter.ALL) }
+    // Only the section being read starts open; the user's own toggles are kept.
     val collapsed = remember(guide.id) { mutableStateMapOf<Int, Boolean>() }
     val items = guide.items
     val read = items.count { it.status == GuideItemStatus.READ }
@@ -62,6 +63,7 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
     val available = items.count { it.status in setOf(GuideItemStatus.AVAILABLE, GuideItemStatus.READING, GuideItemStatus.PARTIAL) }
     val next = items.firstOrNull { it.status == GuideItemStatus.READING }
         ?: items.firstOrNull { it.status == GuideItemStatus.AVAILABLE || it.status == GuideItemStatus.PARTIAL }
+    val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === next } }
     LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "hero") { GuideHero(guide, read, available, missing, items.size) }
         if (guide.checking) item(key = "checking") {
@@ -91,9 +93,9 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
         guide.sections.forEachIndexed { index, section ->
             val visible = section.items.filter { filter.matches(it) }
             if (visible.isEmpty()) return@forEachIndexed
-            val isCollapsed = collapsed[index] == true
+            val isCollapsed = collapsed[index] ?: (index != activeSection)
             item(key = "section:$index") {
-                SectionHeader(section, isCollapsed) { collapsed[index] = !isCollapsed }
+                SectionHeader(section, isCollapsed, onDownload = { actions.onDownloadGuideSection(index) }) { collapsed[index] = !isCollapsed }
             }
             if (!isCollapsed) {
                 val list = visible
@@ -202,8 +204,11 @@ private fun NextReading(item: UiGuideItem, actions: AppActions) {
 }
 
 @Composable
-private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onToggle: () -> Unit) {
+private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onDownload: () -> Unit, onToggle: () -> Unit) {
     val done = section.items.count { it.status == GuideItemStatus.READ }
+    val files = section.items.flatMap { it.files }
+    val pending = files.count { it.bookId == null && it.available != false }
+    val downloading = files.any { it.downloading }
     val total = section.items.size
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "section-arrow")
     Column(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 10.dp)) {
@@ -211,6 +216,14 @@ private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onToggle:
             Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            when {
+                downloading -> CircularProgressIndicator(Modifier.padding(start = 10.dp).size(20.dp), strokeWidth = 2.dp)
+                pending > 0 -> FilledTonalIconButton(onClick = onDownload, modifier = Modifier.padding(start = 6.dp).size(36.dp)) {
+                    Icon(Icons.Default.Download, stringResource(R.string.native_guide_download_section, pending), Modifier.size(18.dp))
+                }
+                files.isNotEmpty() -> Icon(Icons.Default.DownloadDone, stringResource(R.string.native_guide_section_downloaded),
+                    tint = ReadGreen, modifier = Modifier.padding(start = 10.dp).size(20.dp))
+            }
             Icon(Icons.Default.ExpandMore, null, Modifier.padding(start = 6.dp).rotate(rotation))
         }
         LinearProgressIndicator(progress = { if (total > 0) done.toFloat() / total else 0f }, color = ReadGreen,
