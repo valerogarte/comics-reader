@@ -225,8 +225,11 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                             IconButton(onClick = { pendingShelfBooks = selected.toList() }) {
                                 Icon(Icons.Default.LibraryAdd, stringResource(R.string.native_add_to_shelf))
                             }
+                            IconButton(onClick = { actions.onMarkBooksRead(selected.toList()); selected = emptySet() }) {
+                                Icon(Icons.Default.DoneAll, stringResource(R.string.native_mark_read))
+                            }
                             IconButton(onClick = { pendingDelete = selected.toList() }) {
-                                Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_forever))
+                                Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_local))
                             }
                         } else {
                             if (isRemote) IconButton(onClick = actions::onSyncRemote, enabled = server != null && !state.loading) {
@@ -295,7 +298,8 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                                 selected = selected.contains(book.id),
                                 onClick = { if (selected.isNotEmpty()) selected = toggleSelection(selected, book.id) else actions.onOpenBook(book.id) },
                                 onLongClick = { selected = toggleSelection(selected, book.id) },
-                                onDelete = { pendingDelete = listOf(book.id) })
+                                onDelete = { pendingDelete = listOf(book.id) },
+                                onMarkRead = { actions.onMarkBooksRead(listOf(book.id)) }.takeIf { book.progress < 1f })
                         }
                     }
                 } else {
@@ -310,7 +314,8 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                                 selected = selected.contains(book.id),
                                 onClick = { if (selected.isNotEmpty()) selected = toggleSelection(selected, book.id) else actions.onOpenBook(book.id) },
                                 onLongClick = { selected = toggleSelection(selected, book.id) },
-                                onDelete = { pendingDelete = listOf(book.id) })
+                                onDelete = { pendingDelete = listOf(book.id) },
+                                onMarkRead = { actions.onMarkBooksRead(listOf(book.id)) }.takeIf { book.progress < 1f })
                         }
                     }
                 }
@@ -354,7 +359,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     if (pendingDelete.isNotEmpty()) AlertDialog(
         onDismissRequest = { pendingDelete = emptyList() },
         icon = { Icon(Icons.Default.DeleteOutline, null) },
-        title = { Text(stringResource(R.string.native_delete_forever)) },
+        title = { Text(stringResource(R.string.native_delete_local)) },
         text = { Column {
             Text(stringResource(R.string.native_delete_books_message))
             Spacer(Modifier.height(12.dp))
@@ -420,7 +425,7 @@ private fun BookTile(
     id: String, title: String, format: String, size: Long, coverPath: String?, progress: Float,
     selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
-    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) {
@@ -434,7 +439,7 @@ private fun BookTile(
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(fileDetails(format, size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
             }
-            BookAction(downloaded, downloading, onDownload, onDelete)
+            BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead)
         }
     }
 }
@@ -445,7 +450,7 @@ private fun BookListRow(
     id: String, title: String, format: String, size: Long, coverPath: String?, progress: Float,
     selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
-    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
 ) {
     Surface(shape = RoundedCornerShape(12.dp), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
         modifier = Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
@@ -457,13 +462,16 @@ private fun BookListRow(
                 if (progress > 0f) LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp), color = DownloadGreen)
             }
             if (selected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-            else BookAction(downloaded, downloading, onDownload, onDelete)
+            else BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead)
         }
     }
 }
 
 @Composable
-private fun BookAction(downloaded: Boolean?, downloading: Boolean, onDownload: (() -> Unit)?, onDelete: (() -> Unit)?) {
+private fun BookAction(
+    downloaded: Boolean?, downloading: Boolean, onDownload: (() -> Unit)?, onDelete: (() -> Unit)?,
+    onMarkRead: (() -> Unit)? = null,
+) {
     var expanded by remember { mutableStateOf(false) }
     when {
         downloading -> {
@@ -475,7 +483,9 @@ private fun BookAction(downloaded: Boolean?, downloading: Boolean, onDownload: (
         onDelete != null -> Box {
             IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.MoreVert, stringResource(R.string.native_more), Modifier.size(20.dp)) }
             DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.native_delete_forever)) }, leadingIcon = { Icon(Icons.Default.DeleteOutline, null) }, onClick = { expanded = false; onDelete() })
+                if (onMarkRead != null) DropdownMenuItem(text = { Text(stringResource(R.string.native_mark_read)) },
+                    leadingIcon = { Icon(Icons.Default.DoneAll, null) }, onClick = { expanded = false; onMarkRead() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.native_delete_local)) }, leadingIcon = { Icon(Icons.Default.DeleteOutline, null) }, onClick = { expanded = false; onDelete() })
             }
         }
     }

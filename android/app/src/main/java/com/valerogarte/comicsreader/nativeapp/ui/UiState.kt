@@ -132,6 +132,7 @@ interface AppActions {
     fun onPickBackground() {}
     fun onOpenBook(id: String) {}
     fun onDeleteBooks(ids: List<String>) {}
+    fun onMarkBooksRead(ids: List<String>) {}
     fun onCreateShelf(name: String) {}
     fun onAddBooksToShelf(ids: List<String>, name: String) {}
     fun onDeleteShelf(id: String) {}

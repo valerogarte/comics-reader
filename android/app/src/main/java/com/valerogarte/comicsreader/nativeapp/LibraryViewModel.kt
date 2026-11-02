@@ -171,7 +171,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     override fun onDeleteBooks(ids: List<String>) {
-        launchOperation("Borrando definitivamente") {
+        launchOperation("Eliminando del dispositivo") {
             ids.forEach { readerProgressVersions[it] = readerProgressIds.incrementAndGet() }
             val affectedShelves = books.filter { it.id in ids }.mapNotNull { it.shelfName }.toSet()
             if (mutableState.value.reader?.bookId in ids) {
@@ -189,6 +189,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 emptyShelves.addAll(newlyEmpty.filter { it !in emptyShelves })
                 showNextEmptyShelf()
             }
+        }
+    }
+
+    override fun onMarkBooksRead(ids: List<String>) {
+        launchOperation {
+            try { readerProgressLock.withLock { repository.markFinished(ids) } }
+            finally { withContext(NonCancellable) { reloadLibrary() } }
         }
     }
 
