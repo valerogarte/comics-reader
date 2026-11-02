@@ -42,6 +42,8 @@ public final class SftpClient {
     private static final int MAX_RANGE_SIZE = 4 * 1024 * 1024;
     private static final int MAX_SFTP_PACKET = 256 * 1024;
     private static final int SERVER_ALIVE_INTERVAL_MS = 15000;
+    private static final int CHANNEL_INPUT_BUFFER = 2 * 1024 * 1024;
+    private static final int MAX_IDLE_READERS = 4;
     private static final ScheduledThreadPoolExecutor CHANNEL_WATCHDOG = watchdogExecutor();
     // Synology blocks an IP after 10 failed logins in 5 minutes: never retry rejected credentials within that window.
     private static final long AUTH_FAILURE_COOLDOWN_MS = 5 * 60 * 1000;
@@ -101,6 +103,8 @@ public final class SftpClient {
     // reuse a different login's authenticated session or its authentication cooldown.
     private final Map<Credentials, Session> sessions = new HashMap<>();
     private final Map<Credentials, Long> authFailureUntil = new HashMap<>();
+    // Guarded by sessions; each idle reader belongs to the cached session of its credentials.
+    private final Map<Credentials, ArrayDeque<ReaderChannel>> idleReaders = new HashMap<>();
 
     public SftpClient(File knownHostsFile) {
         this(knownHostsFile, 15000, 30000);
@@ -230,35 +234,79 @@ public final class SftpClient {
         }
     }
 
-    /** A book preview resolves its confined path once and reuses its own read-only SFTP handle. */
+    /**
+     * A book preview resolves its confined path and reads through an SFTP subsystem that is kept
+     * for the next preview: the server does not start a new SFTP process for every book.
+     */
     public RangeReader openShelfReader(Credentials credentials, String rootPath, String relativePath)
         throws JSchException, SftpException {
-        ResolvedFile file = withChannel(credentials, (channel, guard) -> {
-            String root = channel.realpath(normalizeShelfPath(rootPath));
-            guard.activity();
-            String path = shelfPath(channel, root, relativePath);
-            guard.activity();
-            SftpATTRS attrs = channel.stat(literalPath(path));
-            guard.activity();
-            if (!attrs.isReg()) throw new IllegalArgumentException("Expected an SFTP file");
-            if (attrs.getSize() < 0) throw new IllegalArgumentException("Invalid SFTP file size");
-            return new ResolvedFile(channel.getSession(), path, attrs.getSize(), attrs.getMTime() * 1000L);
-        });
+        String root = normalizeShelfPath(rootPath);
+        String relative = normalizeShelfPath(relativePath);
+        ReaderChannel idle = takeIdleReader(credentials);
+        if (idle != null) {
+            try {
+                return new RangeReader(this, credentials, idle, root, relative, rangeTimeoutMillis);
+            } catch (IOException stale) {
+                // The server may have closed an idle subsystem; retry once on a new one.
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP operation cancelled", stale);
+                }
+            }
+        }
+        ReaderChannel connection = openReaderChannel(credentials);
         try {
-            return new RangeReader(file.session, file.path, file.size, file.modifiedMillis, rangeTimeoutMillis);
+            return new RangeReader(this, credentials, connection, root, relative, rangeTimeoutMillis);
         } catch (IOException error) {
             throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not open SFTP byte range reader", error);
         }
     }
 
-    private static final class ResolvedFile {
-        final Session session;
-        final String path;
-        final long size;
-        final long modifiedMillis;
-        ResolvedFile(Session session, String path, long size, long modifiedMillis) {
-            this.session = session; this.path = path; this.size = size; this.modifiedMillis = modifiedMillis;
+    private ReaderChannel openReaderChannel(Credentials credentials) throws JSchException, SftpException {
+        Session session = getSession(credentials);
+        try {
+            try {
+                return ReaderChannel.open(session, rangeTimeoutMillis);
+            } catch (JSchException e) {
+                if (e instanceof ChannelDeadlineException || Thread.currentThread().isInterrupted()) throw e;
+                // Same policy as withChannel: reconnect a dropped session once, never retry a login.
+                dropSession(credentials);
+                return ReaderChannel.open(getSession(credentials), rangeTimeoutMillis);
+            }
+        } catch (IOException error) {
+            throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not open SFTP byte range reader", error);
         }
+    }
+
+    private ReaderChannel takeIdleReader(Credentials credentials) {
+        List<ReaderChannel> stale = new ArrayList<>();
+        try {
+            synchronized (sessions) {
+                ArrayDeque<ReaderChannel> idle = idleReaders.get(credentials);
+                Session current = sessions.get(credentials);
+                while (idle != null && !idle.isEmpty()) {
+                    ReaderChannel reader = idle.pollFirst();
+                    if (reader.session == current && reader.usable()) return reader;
+                    stale.add(reader);
+                }
+                return null;
+            }
+        } finally {
+            for (ReaderChannel reader : stale) reader.disconnect();
+        }
+    }
+
+    private void releaseReader(Credentials credentials, ReaderChannel reader) {
+        synchronized (sessions) {
+            if (reader.session == sessions.get(credentials) && reader.usable()) {
+                ArrayDeque<ReaderChannel> idle = idleReaders.get(credentials);
+                if (idle == null) idleReaders.put(credentials, idle = new ArrayDeque<>());
+                if (idle.size() < MAX_IDLE_READERS) {
+                    idle.addFirst(reader);
+                    return;
+                }
+            }
+        }
+        reader.disconnect();
     }
 
     private static void validateRange(long offset, int length) {
@@ -268,26 +316,20 @@ public final class SftpClient {
         }
     }
 
-    /** Exact SFTP v3 reads, pipelined without fetching bytes outside the requested range. */
-    public static final class RangeReader implements Closeable {
-        private static final int PIPELINE_SIZE = 4;
-        private static final int READ_SIZE = 240 * 1024;
-        public final long size;
-        public final long modifiedMillis;
-        private final int timeoutMillis;
-        private final ChannelSubsystem channel;
-        private final DataInputStream input;
-        private final DataOutputStream output;
-        private final byte[] handle;
-        private final AtomicBoolean closed = new AtomicBoolean();
+    /** One SFTP v3 subsystem. While idle it holds no file handle and has no request pending. */
+    private static final class ReaderChannel {
+        final Session session;
+        final ChannelSubsystem channel;
+        final InputStream input;
+        final DataOutputStream output;
         private int requestId = 1;
 
-        private RangeReader(Session session, String path, long size, long modifiedMillis, int timeoutMillis)
-            throws JSchException, SftpException, IOException {
-            this.size = size;
-            this.modifiedMillis = modifiedMillis;
-            this.timeoutMillis = timeoutMillis;
-            channel = (ChannelSubsystem) session.openChannel("subsystem");
+        private ReaderChannel(Session session, ChannelSubsystem channel, InputStream input, DataOutputStream output) {
+            this.session = session; this.channel = channel; this.input = input; this.output = output;
+        }
+
+        static ReaderChannel open(Session session, int timeoutMillis) throws JSchException, SftpException, IOException {
+            ChannelSubsystem channel = (ChannelSubsystem) session.openChannel("subsystem");
             // JSch defaults to 16 KiB; fit one 240 KiB SFTP response in an SSH packet.
             channel.setLocalPacketSize(252 * 1024);
             channel.setSubsystem("sftp");
@@ -295,49 +337,139 @@ public final class SftpClient {
             ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
             try {
                 long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-                input = new DataInputStream(channel.getInputStream());
-                output = new DataOutputStream(channel.getOutputStream());
+                InputStream input = channel.getInputStream();
+                DataOutputStream output = new DataOutputStream(channel.getOutputStream());
                 channel.connect(Math.min(CONNECT_TIMEOUT_MS, timeoutMillis));
                 sendSftpPacket(output, 1, 3, new byte[0]); // INIT, client version 3.
                 DataInputStream version = receiveSftpPacket(input, channel, deadline);
                 if (version.readUnsignedByte() != 2 || version.readInt() != 3) throw new IOException("Unsupported SFTP version");
-                byte[] pathBytes = path.getBytes(StandardCharsets.UTF_8);
-                if (pathBytes.length > 16384) throw new IOException("SFTP path too long");
+                guard.check();
+                return new ReaderChannel(session, channel, input, output);
+            } catch (JSchException | SftpException | IOException | RuntimeException | Error error) {
+                channel.disconnect();
+                if (guard.expired || guard.cancelled) throw new ChannelDeadlineException("SFTP channel opening stopped", error);
+                throw error;
+            } finally { guard.close(); }
+        }
+
+        int send(int type, byte[] payload) throws IOException {
+            if (++requestId <= 0) requestId = 1;
+            sendSftpPacket(output, type, requestId, payload);
+            return requestId;
+        }
+
+        DataInputStream call(int type, byte[] payload, int expectedType, long deadline) throws IOException, SftpException {
+            return receiveSftpResponse(input, send(type, payload), expectedType, false, channel, deadline);
+        }
+
+        String realpath(String path, long deadline) throws IOException, SftpException {
+            DataInputStream name = call(16, sftpString(path), 104, deadline);
+            if (name.readInt() < 1) throw new IOException("Empty SFTP path resolution");
+            return new String(readSftpString(name, 16384), StandardCharsets.UTF_8);
+        }
+
+        boolean usable() {
+            return session.isConnected() && channel.isConnected() && !channel.isClosed() && !channel.isEOF();
+        }
+
+        void disconnect() { channel.disconnect(); }
+    }
+
+    private static byte[] sftpString(String value) throws IOException {
+        return sftpString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static byte[] sftpString(byte[] bytes) throws IOException {
+        if (bytes.length > 16384) throw new IOException("SFTP path too long");
+        ByteArrayOutputStream result = new ByteArrayOutputStream(bytes.length + 4);
+        writeSftpString(new DataOutputStream(result), bytes);
+        return result.toByteArray();
+    }
+
+    /** Exact SFTP v3 reads, pipelined without fetching bytes outside the requested range. */
+    public static final class RangeReader implements Closeable {
+        private static final int PIPELINE_SIZE = 4;
+        private static final int READ_SIZE = 240 * 1024;
+        public final long size;
+        public final long modifiedMillis;
+        private final int timeoutMillis;
+        private final SftpClient owner;
+        private final Credentials credentials;
+        private final ReaderChannel connection;
+        private final ChannelSubsystem channel;
+        private final InputStream input;
+        private final DataOutputStream output;
+        private final byte[] handle;
+        private final AtomicBoolean closed = new AtomicBoolean();
+        private volatile boolean reading;
+        private volatile boolean reusable = true;
+
+        private RangeReader(SftpClient owner, Credentials credentials, ReaderChannel connection, String root, String relative,
+            int timeoutMillis) throws SftpException, IOException {
+            this.owner = owner;
+            this.credentials = credentials;
+            this.connection = connection;
+            this.timeoutMillis = timeoutMillis;
+            channel = connection.channel;
+            input = connection.input;
+            output = connection.output;
+            ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+            try {
+                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                // Same confinement as shelfPath: resolve the root, then the file inside it.
+                String realRoot = connection.realpath(root, deadline);
+                guard.activity();
+                String path = connection.realpath("/".equals(relative) ? realRoot : join(realRoot, relative.substring(1)), deadline);
+                if (!insideRoot(realRoot, path)) throw new IllegalArgumentException("SFTP path is outside the configured folder");
+                guard.activity();
+                DataInputStream attributes = connection.call(17, sftpString(path), 105, deadline); // STAT follows links.
+                int flags = attributes.readInt();
+                long fileSize = (flags & 1) != 0 ? attributes.readLong() : -1;
+                if ((flags & 2) != 0) { attributes.readInt(); attributes.readInt(); }
+                int permissions = (flags & 4) != 0 ? attributes.readInt() : 0;
+                int modified = 0;
+                if ((flags & 8) != 0) { attributes.readInt(); modified = attributes.readInt(); }
+                if ((flags & 4) == 0 || (permissions & 0xf000) != 0x8000) throw new IllegalArgumentException("Expected an SFTP file");
+                if (fileSize < 0) throw new IllegalArgumentException("Invalid SFTP file size");
+                size = fileSize;
+                modifiedMillis = modified * 1000L; // Same signed seconds as SftpATTRS.getMTime in listings.
+                guard.activity();
                 ByteArrayOutputStream openBytes = new ByteArrayOutputStream();
                 DataOutputStream open = new DataOutputStream(openBytes);
-                writeSftpString(open, pathBytes);
+                open.write(sftpString(path));
                 open.writeInt(1); // SSH_FXF_READ only: no create, append or write flags.
                 open.writeInt(0); // Empty attributes.
-                sendSftpPacket(output, 3, requestId, openBytes.toByteArray());
-                DataInputStream opened = receiveSftpResponse(input, requestId, 102, false, channel, deadline);
-                handle = readSftpString(opened, 256);
+                handle = readSftpString(connection.call(3, openBytes.toByteArray(), 102, deadline), 256);
                 if (handle.length == 0) throw new IOException("Invalid SFTP file handle");
                 guard.check();
-            } catch (JSchException | SftpException | IOException | RuntimeException | Error error) {
-                close();
+            } catch (SftpException | IOException | RuntimeException | Error error) {
+                discard();
                 throw error;
             } finally { guard.close(); }
         }
 
         /** Calls may come from different document callback threads; each call has its own deadline. */
         public synchronized byte[] read(long offset, int length) throws SftpException {
-            validateRange(offset, length);
-            if (closed.get()) throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP range reader is closed");
-            int count = (int) Math.min(length, Math.max(0, size - offset));
-            if (count == 0) return new byte[0];
-            ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+            reading = true;
             try {
-                long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-                byte[] result = readRange(offset, count, deadline);
-                guard.check();
-                return result;
-            } catch (IOException error) {
-                close();
-                throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not read SFTP byte range", error);
-            } catch (SftpException | RuntimeException | Error error) {
-                close();
-                throw error;
-            } finally { guard.close(); }
+                validateRange(offset, length);
+                if (closed.get()) throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "SFTP range reader is closed");
+                int count = (int) Math.min(length, Math.max(0, size - offset));
+                if (count == 0) return new byte[0];
+                ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+                try {
+                    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                    byte[] result = readRange(offset, count, deadline);
+                    guard.check();
+                    return result;
+                } catch (IOException error) {
+                    discard();
+                    throw new SftpException(ChannelSftp.SSH_FX_FAILURE, "Could not read SFTP byte range", error);
+                } catch (SftpException | RuntimeException | Error error) {
+                    discard();
+                    throw error;
+                } finally { guard.close(); }
+            } finally { reading = false; }
         }
 
         private byte[] readRange(long offset, int count, long deadline) throws IOException, SftpException {
@@ -364,9 +496,7 @@ public final class SftpClient {
                     writeSftpString(read, handle);
                     read.writeLong(request.offset);
                     read.writeInt(request.length);
-                    if (++requestId <= 0) requestId = 1;
-                    sendSftpPacket(output, 5, requestId, payload.toByteArray());
-                    pending.put(requestId, request);
+                    pending.put(connection.send(5, payload.toByteArray()), request);
                 }
                 if (pending.isEmpty()) break;
                 DataInputStream response = receiveSftpPacket(input, channel, deadline);
@@ -400,9 +530,32 @@ public final class SftpClient {
             return available == count ? result : Arrays.copyOf(result, available);
         }
 
-        /** Closing the dedicated subsystem releases all its handles, without draining queued replies. */
+        /** After a failure, disconnecting the subsystem releases its handle without draining queued replies. */
+        private void discard() {
+            reusable = false;
+            close();
+        }
+
+        /** A clean reader closes its handle and returns the subsystem for the next preview. */
         @Override public void close() {
-            if (closed.compareAndSet(false, true)) channel.disconnect();
+            if (!closed.compareAndSet(false, true)) return;
+            // A concurrent read is aborted by disconnecting, as before; reuse needs an idle protocol state.
+            if (!reusable || reading || Thread.currentThread().isInterrupted()) {
+                connection.disconnect();
+                return;
+            }
+            synchronized (this) {
+                ChannelGuard guard = new ChannelGuard(channel, timeoutMillis);
+                try {
+                    long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                    connection.call(4, sftpString(handle), 101, deadline);
+                    guard.check();
+                } catch (IOException | SftpException | RuntimeException error) {
+                    connection.disconnect();
+                    return;
+                } finally { guard.close(); }
+            }
+            owner.releaseReader(credentials, connection);
         }
     }
 
@@ -421,13 +574,13 @@ public final class SftpClient {
         output.flush();
     }
 
-    private static DataInputStream receiveSftpPacket(DataInputStream input, ChannelSubsystem channel, long deadline) throws IOException {
+    private static DataInputStream receiveSftpPacket(InputStream input, ChannelSubsystem channel, long deadline) throws IOException {
         int length = new DataInputStream(new ByteArrayInputStream(readSftpBytes(input, 4, channel, deadline))).readInt();
         if (length < 5 || length > MAX_SFTP_PACKET) throw new IOException("Invalid SFTP packet length");
         return new DataInputStream(new ByteArrayInputStream(readSftpBytes(input, length, channel, deadline)));
     }
 
-    private static byte[] readSftpBytes(DataInputStream input, int length, ChannelSubsystem channel, long deadline) throws IOException {
+    private static byte[] readSftpBytes(InputStream input, int length, ChannelSubsystem channel, long deadline) throws IOException {
         byte[] result = new byte[length];
         int offset = 0;
         while (offset < length) {
@@ -436,18 +589,35 @@ public final class SftpClient {
             int available = input.available();
             if (available == 0) {
                 if (channel.isClosed() || channel.isEOF()) throw new EOFException("SFTP range channel closed");
-                try { Thread.sleep(2); }
-                catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IOException("SFTP range cancelled", error); }
+                awaitPipe(input);
                 continue;
             }
             int read = input.read(result, offset, Math.min(available, length - offset));
             if (read < 0) throw new EOFException("Incomplete SFTP response");
             offset += read;
+            wakePipeWriter(input);
         }
         return result;
     }
 
-    private static DataInputStream receiveSftpResponse(DataInputStream input, int requestId, int expectedType, boolean allowEof,
+    /**
+     * JSch's session thread, shared by every channel, waits up to one second for room in a full
+     * channel pipe and only a blocking reader wakes it. This reader polls to honour its deadline,
+     * so it wakes the writer itself; the writer's flush wakes this wait as soon as data arrives.
+     */
+    private static void awaitPipe(InputStream input) throws IOException {
+        synchronized (input) {
+            input.notifyAll();
+            try { if (input.available() == 0) input.wait(2); }
+            catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IOException("SFTP range cancelled", error); }
+        }
+    }
+
+    private static void wakePipeWriter(InputStream input) {
+        synchronized (input) { input.notifyAll(); }
+    }
+
+    private static DataInputStream receiveSftpResponse(InputStream input, int requestId, int expectedType, boolean allowEof,
         ChannelSubsystem channel, long deadline)
         throws IOException, SftpException {
         DataInputStream packet = receiveSftpPacket(input, channel, deadline);
@@ -567,6 +737,7 @@ public final class SftpClient {
                 session.disconnect();
             }
             sessions.clear();
+            idleReaders.clear();
         }
     }
 
@@ -702,6 +873,8 @@ public final class SftpClient {
             session.setServerAliveInterval(SERVER_ALIVE_INTERVAL_MS);
             session.setServerAliveCountMax(2);
             session.setTimeout(30000);
+            // Without this JSch caps each channel pipe at 32 KiB, far below the pipelined reads.
+            session.setConfig("max_input_buffer_size", Integer.toString(CHANNEL_INPUT_BUFFER));
             try {
                 session.connect(CONNECT_TIMEOUT_MS);
             } catch (JSchException e) {
@@ -725,6 +898,7 @@ public final class SftpClient {
     private void dropSession(Credentials credentials) {
         synchronized (sessions) {
             Session session = sessions.remove(credentials);
+            idleReaders.remove(credentials);
             if (session != null) {
                 session.disconnect();
             }

@@ -251,7 +251,8 @@ class LibraryRepository(context: Context) : Closeable {
                             val old = previous[entry.path]
                             val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
                             val hasCover = old?.coverPath?.let { File(it).isFile } == true
-                            val previewIsCurrent = old?.previewVersion == REMOTE_PREVIEW_VERSION
+                            val previewIsCurrent = old?.previewVersion == REMOTE_PREVIEW_VERSION ||
+                                (hasCover && (old?.previewVersion ?: 0) >= REMOTE_COVER_COMPATIBLE_VERSION)
                             val coverAvailable = old?.coverPath == null || hasCover
                             val updated = if (unchanged && previewIsCurrent && coverAvailable) entry else previewSlots.withPermit {
                                 inspectRemote(config, entry, folderPath)
@@ -637,7 +638,9 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
-        private const val REMOTE_PREVIEW_VERSION = 9
+        private const val REMOTE_PREVIEW_VERSION = 10
+        // Version 10 only adds RAR4 covers that used to fail; covers since version 9 stay valid.
+        private const val REMOTE_COVER_COMPATIBLE_VERSION = 9
         private val reconciledRoots = HashSet<String>()
         private val generatedLocalFile = Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[a-zA-Z0-9]+(?:\\.part)?")
         private val generatedRemoteCover = Regex("[0-9a-f]{64}(?:-[0-9a-f]{64})?\\.jpg(?:\\.part)?")

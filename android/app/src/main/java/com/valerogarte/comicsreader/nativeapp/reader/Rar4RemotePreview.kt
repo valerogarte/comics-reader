@@ -1,14 +1,17 @@
 package com.valerogarte.comicsreader.nativeapp.reader
 
 import java.io.IOException
+import java.nio.charset.Charset
 import java.util.zip.CRC32
 
 /** Reads RAR4 headers by offset and exposes individual non-solid entries to libarchive. */
 internal object Rar4RemotePreview {
     private val signature = byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00)
     private val endHeader = byteArrayOf(0xc4.toByte(), 0x3d, 0x7b, 0x00, 0x40, 0x07, 0x00)
+    private val oemCharset: Charset = runCatching { Charset.forName("IBM437") }.getOrDefault(Charsets.ISO_8859_1)
 
-    private data class Entry(val name: String, val offset: Long, val length: Long)
+    /** [header] stores the entry as [archiveName]; [dataOffset] locates the original compressed data. */
+    private class Entry(val name: String, val archiveName: String, val header: ByteArray, val dataOffset: Long, val dataSize: Long)
 
     /** Null means this RAR variant must use the general archive reader. */
     fun inspect(name: String, input: RemoteInput): DocumentMetadata? {
@@ -40,8 +43,8 @@ internal object Rar4RemotePreview {
                 }
                 0x74 -> {
                     if (main == null || headerSize < 32) throw IOException("Entrada RAR inválida")
-                    // Split, encrypted, solid and RAR's encoded Unicode names need the general reader.
-                    if (flags and 0x0217 != 0) return null
+                    // Split, encrypted and solid entries need the general reader.
+                    if (flags and 0x0017 != 0) return null
                     val large = flags and 0x0100 != 0
                     val nameOffset = if (large) 40 else 32
                     if (headerSize < nameOffset) throw IOException("Entrada RAR incompleta")
@@ -53,10 +56,12 @@ internal object Rar4RemotePreview {
                     val nameSize = u16(header, 26)
                     if (nameSize > headerSize - nameOffset) throw IOException("Nombre RAR inválido")
                     val rawName = header.copyOfRange(nameOffset, nameOffset + nameSize)
-                    if (rawName.any { (it.toInt() and 0xff) !in 1..127 }) return null
-                    val entryName = rawName.toString(Charsets.US_ASCII)
+                    val entryName = decodeName(rawName, unicode = flags and 0x0200 != 0)
                     if (dataSize > input.size - offset - headerSize) throw IOException("Entrada RAR incompleta")
-                    if (flags and 0x00e0 != 0x00e0) entries += Entry(entryName, offset, headerSize + dataSize)
+                    if (flags and 0x00e0 != 0x00e0) {
+                        val archiveName = "entry" + (imageExtension.find(entryName)?.value ?: ".xml")
+                        entries += Entry(entryName, archiveName, renamed(header, flags, nameOffset, nameSize, archiveName), offset + headerSize, dataSize)
+                    }
                 }
                 0x7b -> { ended = true; break }
             }
@@ -68,10 +73,12 @@ internal object Rar4RemotePreview {
         val images = entries.filter { isComicImage(it.name) }
             .sortedWith { a, b -> naturalOrder.compare(a.name, b.name) }
         if (images.isEmpty()) throw IOException("El archivo no contiene páginas de imágenes")
+        // libarchive rewrites '\\' separators and rejects names it cannot convert, so each
+        // virtual archive holds its entry under a plain ASCII name.
         fun read(entry: Entry, maxSize: Int): ByteArray = BookArchive(
-            remote = RarEntryInput(input, archivePrefix, entry.offset, entry.length, endHeader),
-        ).read(entry.name, maxSize)
-        val info = entries.firstOrNull { it.name.substringAfterLast('/').equals("ComicInfo.xml", true) }
+            remote = RarEntryInput(input, archivePrefix + entry.header, entry.dataOffset, entry.dataSize, endHeader),
+        ).read(entry.archiveName, maxSize)
+        val info = entries.firstOrNull { it.name.replace('\\', '/').substringAfterLast('/').equals("ComicInfo.xml", true) }
             ?.let { runCatching { XmlContent.parse(read(it, 1024 * 1024)) }.getOrNull() }
         val metadataIndex = info?.descendants("Page")?.firstOrNull { it.attr("Type").equals("FrontCover", true) }
             ?.attr("Image")?.toIntOrNull()
@@ -88,6 +95,66 @@ internal object Rar4RemotePreview {
             pageCount = images.size,
             cover = cover,
         )
+    }
+
+    /** Copy of a file header whose name is replaced; the compressed data does not depend on it. */
+    private fun renamed(header: ByteArray, flags: Int, nameOffset: Int, nameSize: Int, name: String): ByteArray {
+        val bytes = name.toByteArray(Charsets.US_ASCII)
+        val result = header.copyOf(nameOffset) + bytes + header.copyOfRange(nameOffset + nameSize, header.size)
+        put16(result, 3, flags and 0x0200.inv())
+        put16(result, 5, result.size)
+        put16(result, 26, bytes.size)
+        put16(result, 0, CRC32().apply { update(result, 2, result.size - 2) }.value.toInt() and 0xffff)
+        return result
+    }
+
+    /** Names only order pages and pick the cover: an imperfect legacy decoding is harmless. */
+    private fun decodeName(raw: ByteArray, unicode: Boolean): String {
+        if (!unicode) return String(raw, oemCharset)
+        val zero = raw.indexOf(0)
+        if (zero < 0) return String(raw, Charsets.UTF_8)
+        val name = raw.copyOf(zero)
+        return decodeUnicode(name, raw.copyOfRange(zero + 1, raw.size)) ?: String(name, oemCharset)
+    }
+
+    /** RAR 3 stores Unicode names as a compact difference from the OEM name (unrar's EncodeFileName). */
+    private fun decodeUnicode(name: ByteArray, encoded: ByteArray): String? {
+        if (encoded.isEmpty()) return null
+        val result = StringBuilder()
+        val high = (encoded[0].toInt() and 0xff) shl 8
+        var position = 1
+        var flags = 0
+        var bits = 0
+        fun available(count: Int) = position + count <= encoded.size
+        fun next() = encoded[position++].toInt() and 0xff
+        while (position < encoded.size && result.length < 0xffff) {
+            if (bits == 0) { flags = next(); bits = 8 }
+            when (flags shr 6) {
+                0 -> if (available(1)) result.append(next().toChar())
+                1 -> if (available(1)) result.append((next() + high).toChar())
+                2 -> if (available(2)) result.append((next() or (next() shl 8)).toChar())
+                else -> if (available(1)) {
+                    val length = next()
+                    if (length and 0x80 != 0) {
+                        if (!available(1)) return null
+                        val correction = next()
+                        repeat((length and 0x7f) + 2) {
+                            if (result.length < name.size) result.append((((name[result.length].toInt() + correction) and 0xff) + high).toChar())
+                        }
+                    } else repeat(length + 2) {
+                        if (result.length < name.size) result.append((name[result.length].toInt() and 0xff).toChar())
+                    }
+                }
+            }
+            flags = (flags shl 2) and 0xff
+            bits -= 2
+        }
+        return result.toString().takeIf { it.isNotEmpty() && '\u0000' !in it }
+    }
+
+    private fun put16(bytes: ByteArray, offset: Int, value: Int) {
+        bytes[offset] = value.toByte()
+        bytes[offset + 1] = (value shr 8).toByte()
     }
 
     private fun u16(bytes: ByteArray, offset: Int): Int =
