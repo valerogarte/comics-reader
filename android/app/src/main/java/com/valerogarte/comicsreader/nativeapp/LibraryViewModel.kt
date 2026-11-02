@@ -845,6 +845,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             entry.coverPath ?: book?.coverPath,
             downloaded = book != null, downloading = entry.path in browser.transferringPaths, progress = book?.let(::progress) ?: 0f,
             queued = browser.queue.any { it.path == entry.path }, bookId = book?.id,
+            folderCovers = entry.previewCovers,
             fileCount = entry.fileCount)
     }
 

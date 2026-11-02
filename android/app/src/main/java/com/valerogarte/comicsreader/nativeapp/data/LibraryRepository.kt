@@ -26,6 +26,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -221,7 +222,8 @@ class LibraryRepository(context: Context) : Closeable {
             val cached = database.remoteFolder(config.id, folderPath)?.withDownloadState()
             if (cached != null && !refresh) return@withLock cached
             val client = clientFor(serverId)
-            val previous = cached?.entries?.associateBy { it.path }.orEmpty()
+            // Without a cached listing, thumbnails prepared for this folder's own folder tile are reused.
+            val previous = (cached?.entries ?: database.remoteEntries(config.id, folderPath)).associateBy { it.path }
             val rawListing = runInterruptible(Dispatchers.IO) { client.listShelf(config.credentials(), config.rootPath, folderPath) }
             val listing = rawListing
                 .filter { it.directory || BookFormats.supports(it.name) }
@@ -254,50 +256,61 @@ class LibraryRepository(context: Context) : Closeable {
             var lastPublished = System.nanoTime()
             coroutineScope {
                 val work = Channel<IndexedValue<RemoteEntry>>(PREVIEW_WORKERS)
-                val results = Channel<Pair<Int, RemoteEntry>>(PREVIEW_WORKERS + 1)
+                val results = Channel<Pair<Int, RemoteEntry>>(Channel.UNLIMITED)
+                val booksDone = CompletableDeferred<Unit>().apply { if (total == 0) complete(Unit) }
                 launch {
-                    pending.forEach { work.send(it) }
-                    work.close()
-                }
-                // Count only direct children, with one extra listing at a time across servers.
-                // This work runs alongside previews and never blocks their queue.
-                launch {
-                    for ((index, entry) in directories) {
-                        val updated = folderCountSlots.withPermit { countRemoteFiles(config, entry, folderPath) }
-                        results.send(index to updated)
-                    }
-                }
-                repeat(minOf(PREVIEW_WORKERS, total)) {
-                    launch {
-                        for ((index, entry) in work) {
-                            currentCoroutineContext().ensureActive()
-                            val old = previous[entry.path]
-                            val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
-                            val hasCover = old?.coverPath?.let { File(it).isFile } == true
-                            val previewIsCurrent = old?.previewVersion == REMOTE_PREVIEW_VERSION ||
-                                (hasCover && (old?.previewVersion ?: 0) >= REMOTE_COVER_COMPATIBLE_VERSION)
-                            val coverAvailable = old?.coverPath == null || hasCover
-                            val updated = if (unchanged && previewIsCurrent && coverAvailable) entry else previewSlots.withPermit {
-                                inspectRemote(config, entry, folderPath)
+                    coroutineScope {
+                        launch {
+                            pending.forEach { work.send(it) }
+                            work.close()
+                        }
+                        // Count only direct children, with one extra listing at a time across servers.
+                        // Folder thumbnails wait for this folder's own books, so they never delay them.
+                        launch {
+                            val counted = directories.map { (index, entry) ->
+                                val updated = folderCountSlots.withPermit { countRemoteFiles(config, entry, folderPath) }
+                                results.send(index to updated)
+                                index to updated
                             }
-                            results.send(index to updated)
+                            booksDone.await()
+                            for ((index, entry) in counted) {
+                                if (entry.previewCovers.size < FOLDER_COVERS) results.send(index to previewDirectory(config, entry))
+                            }
+                        }
+                        repeat(minOf(PREVIEW_WORKERS, total)) {
+                            launch {
+                                for ((index, entry) in work) {
+                                    currentCoroutineContext().ensureActive()
+                                    val old = previous[entry.path]
+                                    val unchanged = old != null && old.size == entry.size && old.modified == entry.modified
+                                    val hasCover = old?.coverPath?.let { File(it).isFile } == true
+                                    val previewIsCurrent = old?.previewVersion == REMOTE_PREVIEW_VERSION ||
+                                        (hasCover && (old?.previewVersion ?: 0) >= REMOTE_COVER_COMPATIBLE_VERSION)
+                                    val coverAvailable = old?.coverPath == null || hasCover
+                                    val updated = if (unchanged && previewIsCurrent && coverAvailable) entry else previewSlots.withPermit {
+                                        inspectRemote(config, entry, folderPath)
+                                    }
+                                    results.send(index to updated)
+                                }
+                            }
                         }
                     }
+                    results.close()
                 }
                 // One collector owns the list and progress; a slow book cannot block the others.
-                repeat(total + directories.size) { resultIndex ->
-                    val (index, updated) = results.receive()
+                for ((index, updated) in results) {
                     entries[index] = updated
                     if (!updated.isDirectory) completed += 1
+                    if (completed == total) booksDone.complete(Unit)
                     val now = System.nanoTime()
-                    val finalUpdate = resultIndex + 1 == total + directories.size
                     val booksComplete = !updated.isDirectory && completed == total
-                    if (onUpdate != null && (finalUpdate || booksComplete || now - lastPublished >= 100_000_000L)) {
+                    if (onUpdate != null && (booksComplete || now - lastPublished >= 100_000_000L)) {
                         folder = snapshot()
                         onUpdate.invoke(folder, completed, total)
                         lastPublished = now
                     }
                 }
+                if (onUpdate != null) onUpdate.invoke(snapshot(), completed, total)
             }
             remoteCacheMutation.withLock { pruneRemoteCovers() }
             snapshot()
@@ -313,11 +326,50 @@ class LibraryRepository(context: Context) : Closeable {
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { job.ensureActive(); null }
         val updated = entry.copy(fileCount = count)
-        remoteCacheMutation.withLock {
+        val covers = remoteCacheMutation.withLock {
             job.ensureActive()
             database.cacheEntry(config.id, folderPath, updated)
+            database.folderCovers(config.id, entry.path, FOLDER_COVERS)
         }
-        return updated
+        return updated.copy(previewCovers = covers)
+    }
+
+    /**
+     * Prepares thumbnails for the first books of a subfolder, so its folder tile shows what is
+     * inside. They are ordinary catalog entries of that subfolder: opening it later reuses them.
+     */
+    private suspend fun previewDirectory(config: SftpConfig, entry: RemoteEntry): RemoteEntry {
+        prepareFolderCovers(config, entry.path, depth = 0)
+        return entry.copy(previewCovers = remoteCacheMutation.withLock { database.folderCovers(config.id, entry.path, FOLDER_COVERS) })
+    }
+
+    /** A folder holding only subfolders borrows covers from its first subfolder, two levels deep at most. */
+    private suspend fun prepareFolderCovers(config: SftpConfig, folderPath: String, depth: Int) {
+        val job = currentCoroutineContext()
+        val listing = try {
+            runInterruptible(Dispatchers.IO) { clientFor(config.profileId).listShelf(config.credentials(), config.rootPath, folderPath) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { job.ensureActive(); return }
+        val books = listing.filter { !it.directory && BookFormats.supports(it.name) }
+        if (books.isEmpty()) {
+            val first = listing.filter { it.directory }.minWithOrNull(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            if (first != null && depth < 2) prepareFolderCovers(config, join(folderPath, first.name), depth + 1)
+            return
+        }
+        val known = remoteCacheMutation.withLock { database.remoteEntries(config.id, folderPath) }.associateBy { it.path }
+        books.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            .take(FOLDER_COVERS)
+            .forEach { item ->
+                val path = join(folderPath, item.name)
+                val old = known[path]
+                val attempted = old != null && old.size == item.size && old.modified == item.modifiedMillis &&
+                    (old.previewVersion == REMOTE_PREVIEW_VERSION || old.coverPath?.let { File(it).isFile } == true)
+                if (!attempted) previewSlots.withPermit {
+                    inspectRemote(config, RemoteEntry(item.name, path, false, item.size, item.modifiedMillis,
+                        title = item.name.substringBeforeLast('.', item.name), format = BookFormats.format(item.name),
+                        sourceId = config.id), folderPath)
+                }
+            }
     }
 
     /** Only this explicit action transfers a complete remote book. */
@@ -661,6 +713,7 @@ class LibraryRepository(context: Context) : Closeable {
 
     companion object {
         private const val PREVIEW_WORKERS = 3
+        private const val FOLDER_COVERS = 3
         private val comicFormats = setOf("cbr", "cbz", "cb7", "cbt")
         private const val REMOTE_PREVIEW_VERSION = 10
         // Version 10 only adds RAR4 covers that used to fail; covers since version 9 stay valid.

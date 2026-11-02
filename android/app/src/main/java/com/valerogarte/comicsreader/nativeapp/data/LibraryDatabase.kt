@@ -201,13 +201,28 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
         val cachedAt = readableDatabase.rawQuery(
             "SELECT cached_at FROM remote_folders WHERE source_id=? AND path=?", arrayOf(sourceId, path),
         ).use { if (it.moveToFirst()) it.getLong(0) else null } ?: return null
-        val entries = readableDatabase.rawQuery("""SELECT r.*,b.id AS downloaded_book_id
+        val entries = remoteEntries(sourceId, path).map { if (it.isDirectory) it.copy(previewCovers = folderCovers(sourceId, it.path)) else it }
+        return RemoteFolder(path, entries, cachedAt, sourceId)
+    }
+
+    /** Entries stored for a folder, including thumbnails prepared before the folder was opened. */
+    fun remoteEntries(sourceId: String, path: String): List<RemoteEntry> = readableDatabase.rawQuery("""SELECT r.*,b.id AS downloaded_book_id
             FROM remote_entries r LEFT JOIN books b ON b.source_id=r.source_id AND b.remote_path=r.path
             WHERE r.source_id=? AND r.parent_path=?
             ORDER BY r.is_directory DESC,r.name COLLATE NOCASE""", arrayOf(sourceId, path)).use { cursor ->
-            buildList { while (cursor.moveToNext()) add(cursor.remoteEntry()) }
-        }
-        return RemoteFolder(path, entries, cachedAt, sourceId)
+        buildList { while (cursor.moveToNext()) add(cursor.remoteEntry()) }
+    }
+
+    /** Thumbnails of books in a folder, then in its subfolders, as cached so far. */
+    fun folderCovers(sourceId: String, path: String, limit: Int = 3): List<String> {
+        val prefix = "${path.trimEnd('/')}/"
+        return readableDatabase.rawQuery("""SELECT cover_path FROM remote_entries
+            WHERE source_id=? AND is_directory=0 AND cover_path IS NOT NULL
+            AND (parent_path=? OR substr(parent_path,1,length(?))=?)
+            ORDER BY parent_path<>?, parent_path COLLATE NOCASE, name COLLATE NOCASE LIMIT ?""",
+            arrayOf(sourceId, path, prefix, prefix, path, (limit * 2).toString())).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }.filter { java.io.File(it).isFile }.take(limit)
     }
 
     fun cacheFolder(folder: RemoteFolder) = transaction {

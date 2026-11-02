@@ -67,6 +67,8 @@ data class UiRemoteEntry(
     val queued: Boolean = false,
     /** Local copy of this remote file, when it has been downloaded. */
     val bookId: String? = null,
+    /** Directories: thumbnails of books inside, drawn sticking out of the folder. */
+    val folderCovers: List<String> = emptyList(),
 )
 
 data class UiSettings(

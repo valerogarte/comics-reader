@@ -34,6 +34,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -427,7 +430,8 @@ private fun RemoteNavigation(state: AppUiState, actions: AppActions) {
 private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
     Surface(Modifier.fillMaxWidth().clickable { actions.onOpenRemoteFolder(folder.path) }, color = MaterialTheme.colorScheme.surfaceContainerLow, shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), tint = MaterialTheme.colorScheme.primary)
+            if (folder.folderCovers.isEmpty()) Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), tint = MaterialTheme.colorScheme.primary)
+            else FolderCovers(folder.folderCovers, folder.name)
             Column(Modifier.padding(start = 14.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(folder.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val count = folder.fileCount
@@ -440,6 +444,32 @@ private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
             }
             Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** A folder drawing with the covers of the first books inside sticking out of it. */
+@Composable
+private fun FolderCovers(covers: List<String>, name: String) {
+    val front = MaterialTheme.colorScheme.primary
+    val back = lerp(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.surface, .5f)
+    val pocket = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+    Box(Modifier.size(width = 118.dp, height = 96.dp).semantics(mergeDescendants = true) {}) {
+        Box(Modifier.offset(x = 8.dp, y = 6.dp).size(width = 42.dp, height = 16.dp).background(back, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
+        Box(Modifier.padding(top = 16.dp).fillMaxSize().background(back, RoundedCornerShape(8.dp)))
+        val center = (covers.size - 1) / 2f
+        // Outer covers first, so the middle one lies on top as in a fanned stack.
+        covers.withIndex().sortedByDescending { kotlin.math.abs(it.index - center) }.forEach { (index, path) ->
+            val shift = index - center
+            CoverImage(path, name, Modifier.align(Alignment.BottomCenter)
+                .offset(x = (shift * 26).dp, y = (-14).dp)
+                .graphicsLayer { rotationZ = shift * 9f; transformOrigin = TransformOrigin(.5f, 1f) }
+                .size(width = 50.dp, height = 75.dp)
+                .shadow(3.dp, RoundedCornerShape(3.dp))
+                .clip(RoundedCornerShape(3.dp)))
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(26.dp).shadow(4.dp, pocket).background(front, pocket))
+        Icon(Icons.Default.Folder, stringResource(R.string.native_open_folder), Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 5.dp).size(16.dp),
+            tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = .7f))
     }
 }
 

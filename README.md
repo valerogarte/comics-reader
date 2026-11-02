@@ -28,6 +28,8 @@ En los archivos CBR con RAR4 o RAR5 no sólido, cuando su estructura lo permite,
 
 La sincronización explícita también renueva las portadas de extractores anteriores o desaparecidas del almacenamiento, y elimina las fichas y miniaturas de subcarpetas remotas que hayan dejado de existir. Los libros descargados conservan sus archivos y estanterías.
 
+Las carpetas SFTP se dibujan como una carpeta de la que asoman las portadas de hasta tres de sus libros, tomadas de la caché (también de sus subcarpetas). Al abrir o sincronizar una carpeta, y siempre después de las portadas de sus propios libros, se preparan las miniaturas de los tres primeros libros de cada subcarpeta que aún no tenga; si una subcarpeta solo contiene otras carpetas, se usan las de su primera subcarpeta, hasta dos niveles. Son fichas normales del catálogo: al abrir después esa subcarpeta se reutilizan. Las carpetas sin libros conocidos conservan el icono.
+
 Cada carpeta SFTP muestra, cuando se puede consultar, el número de archivos que contiene directamente, de cualquier formato, sin sumar los de sus subcarpetas. El recuento se completa en segundo plano, se guarda en caché y se actualiza con **Sincronizar**. Si el servidor no permite obtenerlo, aparece «Recuento no disponible».
 
 ## Datos

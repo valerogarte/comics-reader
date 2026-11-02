@@ -73,6 +73,8 @@ data class RemoteEntry(
     val previewVersion: Int = 0,
     /** Direct files in a directory, including every format; null means not counted yet. */
     val fileCount: Int? = null,
+    /** Directories only: cached thumbnails of the first books inside, never stored on this row. */
+    val previewCovers: List<String> = emptyList(),
 )
 
 data class RemoteFolder(
