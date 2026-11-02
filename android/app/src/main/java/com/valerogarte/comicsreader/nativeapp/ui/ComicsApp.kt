@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -221,7 +222,18 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         }) { Icon(if (selected.isEmpty()) Icons.Default.Menu else Icons.Default.Close, stringResource(if (selected.isEmpty()) R.string.native_menu else R.string.native_close)) }
                     },
                     actions = {
-                        if (selected.isNotEmpty()) {
+                        if (selected.isNotEmpty() && isRemote) {
+                            val chosen = state.remoteEntries.filter { !it.isDirectory && it.path in selected }
+                            val downloadable = chosen.filter { !it.downloaded && !it.downloading && !it.queued }
+                            val local = chosen.mapNotNull { it.bookId }
+                            if (downloadable.isNotEmpty()) IconButton(onClick = { actions.onDownloadRemotePaths(downloadable.map { it.path }); selected = emptySet() },
+                                modifier = Modifier.testTag("download_selected")) {
+                                Icon(Icons.Default.Download, stringResource(R.string.native_download_selected))
+                            }
+                            if (local.isNotEmpty()) IconButton(onClick = { pendingDelete = local }, modifier = Modifier.testTag("delete_selected")) {
+                                Icon(Icons.Default.DeleteOutline, stringResource(R.string.native_delete_local))
+                            }
+                        } else if (selected.isNotEmpty()) {
                             IconButton(onClick = { pendingShelfBooks = selected.toList() }) {
                                 Icon(Icons.Default.LibraryAdd, stringResource(R.string.native_add_to_shelf))
                             }
@@ -255,14 +267,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 if (isRemote) {
                     RemoteNavigation(state, actions)
                 }
-                if (state.loading || state.busyMessage != null) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                        Text(state.busyMessage ?: stringResource(R.string.native_loading), style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                        Spacer(Modifier.height(8.dp))
-                        if (state.operationProgress != null) LinearProgressIndicator(progress = { state.operationProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                        else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                }
+                // Content keeps its position while work is in progress, so a tap during a download
+                // still reaches the book under the finger.
+                Box(Modifier.weight(1f).fillMaxWidth()) {
                 val empty = if (isRemote) remoteBooks.isEmpty() && folders.isEmpty() else visibleBooks.isEmpty()
                 if (isRemote && state.settings.sftpServers.isEmpty()) {
                     EmptyLibrary(Icons.Default.Storage, stringResource(R.string.native_configure_sftp), stringResource(R.string.native_configure_sftp_detail), actions::onShowSettings, R.string.native_configure_sftp)
@@ -291,8 +298,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         }
                         if (isRemote) items(remoteBooks, key = { "remote:${it.path}" }) { entry ->
                             BookTile(entry.path, entry.title, entry.format, entry.size, entry.coverPath, entry.progress,
-                                downloaded = entry.downloaded, downloading = entry.downloading,
-                                onClick = { actions.onOpenRemoteBook(entry.path) }, onDownload = { actions.onDownloadRemote(entry.path) })
+                                selected = entry.path in selected, downloaded = entry.downloaded, downloading = entry.downloading, queued = entry.queued,
+                                onClick = { selected = toggleSelection(selected, entry.path) }, onLongClick = { selected = toggleSelection(selected, entry.path) },
+                                onDownload = { actions.onDownloadRemote(entry.path) }, onRead = { actions.onOpenRemoteBook(entry.path) })
                         } else items(visibleBooks, key = { it.id }) { book ->
                             BookTile(book.id, book.title, book.format, book.size, book.coverPath, book.progress,
                                 selected = selected.contains(book.id),
@@ -307,8 +315,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                         if (isRemote) items(folders, key = { "folder:${it.path}" }) { FolderRow(it, actions) }
                         if (isRemote) items(remoteBooks, key = { "remote:${it.path}" }) { entry ->
                             BookListRow(entry.path, entry.title, entry.format, entry.size, entry.coverPath, entry.progress,
-                                downloaded = entry.downloaded, downloading = entry.downloading,
-                                onClick = { actions.onOpenRemoteBook(entry.path) }, onDownload = { actions.onDownloadRemote(entry.path) })
+                                selected = entry.path in selected, downloaded = entry.downloaded, downloading = entry.downloading, queued = entry.queued,
+                                onClick = { selected = toggleSelection(selected, entry.path) }, onLongClick = { selected = toggleSelection(selected, entry.path) },
+                                onDownload = { actions.onDownloadRemote(entry.path) }, onRead = { actions.onOpenRemoteBook(entry.path) })
                         } else items(visibleBooks, key = { it.id }) { book ->
                             BookListRow(book.id, book.title, book.format, book.size, book.coverPath, book.progress,
                                 selected = selected.contains(book.id),
@@ -318,6 +327,19 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                                 onMarkRead = { actions.onMarkBooksRead(listOf(book.id)) }.takeIf { book.progress < 1f })
                         }
                     }
+                }
+                if (state.loading || state.busyMessage != null) {
+                    // Not a Surface: Material surfaces consume touches, and the books below stay tappable.
+                    Box(Modifier.align(Alignment.BottomCenter).padding(12.dp).widthIn(max = 560.dp).fillMaxWidth()
+                        .shadow(6.dp, RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(14.dp))) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Text(state.busyMessage ?: stringResource(R.string.native_loading), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                            Spacer(Modifier.height(8.dp))
+                            if (state.operationProgress != null) LinearProgressIndicator(progress = { state.operationProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                            else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
                 }
             }
         }
@@ -392,7 +414,7 @@ private fun RemoteNavigation(state: AppUiState, actions: AppActions) {
                 onClick = { actions.onOpenRemoteFolder(remoteParentPath(state.remotePath)) },
                 enabled = state.remotePath != "/",
             ) { Icon(Icons.Default.DriveFolderUpload, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_parent_folder)) }
-            FilledTonalButton(onClick = actions::onDownloadAll, enabled = !state.loading && state.remoteEntries.none { it.downloading } && state.remoteEntries.any { !it.isDirectory && !it.downloaded }) {
+            FilledTonalButton(onClick = actions::onDownloadAll, enabled = !state.loading && state.remoteEntries.any { !it.isDirectory && !it.downloaded && !it.downloading && !it.queued }) {
                 Icon(Icons.Default.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.native_download_all))
             }
         }
@@ -423,9 +445,9 @@ private fun FolderRow(folder: UiRemoteEntry, actions: AppActions) {
 @Composable
 private fun BookTile(
     id: String, title: String, format: String, size: Long, coverPath: String?, progress: Float,
-    selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false,
+    selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false, queued: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
-    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null, onRead: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp))) {
@@ -439,7 +461,7 @@ private fun BookTile(
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(fileDetails(format, size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
             }
-            BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead)
+            BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead, queued, onRead)
         }
     }
 }
@@ -448,9 +470,9 @@ private fun BookTile(
 @Composable
 private fun BookListRow(
     id: String, title: String, format: String, size: Long, coverPath: String?, progress: Float,
-    selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false,
+    selected: Boolean = false, downloaded: Boolean? = null, downloading: Boolean = false, queued: Boolean = false,
     onClick: () -> Unit, onLongClick: (() -> Unit)? = null,
-    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null, onDelete: (() -> Unit)? = null, onMarkRead: (() -> Unit)? = null, onRead: (() -> Unit)? = null,
 ) {
     Surface(shape = RoundedCornerShape(12.dp), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
         modifier = Modifier.fillMaxWidth().testTag("book:$id").semantics { this.selected = selected }.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
@@ -462,7 +484,7 @@ private fun BookListRow(
                 if (progress > 0f) LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp), color = DownloadGreen)
             }
             if (selected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-            else BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead)
+            else BookAction(downloaded, downloading, onDownload, onDelete, onMarkRead, queued, onRead)
         }
     }
 }
@@ -470,13 +492,17 @@ private fun BookListRow(
 @Composable
 private fun BookAction(
     downloaded: Boolean?, downloading: Boolean, onDownload: (() -> Unit)?, onDelete: (() -> Unit)?,
-    onMarkRead: (() -> Unit)? = null,
+    onMarkRead: (() -> Unit)? = null, queued: Boolean = false, onRead: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     when {
         downloading -> {
             val label = stringResource(R.string.native_downloading)
             Box(Modifier.size(48.dp).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+        }
+        queued -> Icon(Icons.Default.Schedule, stringResource(R.string.native_queued), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(12.dp).size(24.dp))
+        downloaded == true && onRead != null -> IconButton(onClick = onRead, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.AutoMirrored.Filled.MenuBook, stringResource(R.string.native_read_downloaded), tint = DownloadGreen)
         }
         downloaded == true -> Icon(Icons.Default.CheckCircle, stringResource(R.string.native_downloaded), tint = DownloadGreen, modifier = Modifier.padding(8.dp).size(24.dp))
         onDownload != null -> IconButton(onClick = onDownload, modifier = Modifier.size(48.dp)) { Icon(Icons.Default.Download, stringResource(R.string.native_download)) }

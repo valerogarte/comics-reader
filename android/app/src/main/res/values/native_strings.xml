@@ -71,6 +71,9 @@
     <string name="native_ai_model">Modelo</string>
     <string name="native_ai_models">Modelos sugeridos</string>
     <string name="native_ai_model_hint">Identificador del modelo tal como lo publica el proveedor.</string>
+    <string name="native_download_selected">Descargar seleccionados</string>
+    <string name="native_queued">En cola</string>
+    <string name="native_read_downloaded">Leer</string>
     <string name="native_filter_books">Filtrar libros: %1$s</string>
     <string name="native_mark_read">Marcar como leído</string>
     <string name="native_delete_books_message">Se eliminarán de este dispositivo los libros seleccionados y su posición de lectura. Esta acción no se puede deshacer.</string>

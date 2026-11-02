@@ -51,6 +51,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         var transferringPaths = emptySet<String>()
         var transferMessage: String? = null
         var transferProgress: Float? = null
+        // Downloads wait here while another one runs; each entry keeps its own path on this server.
+        val queue = ArrayDeque<RemoteEntry>()
     }
     // Browser state is confined to the main thread; background callbacks publish through viewModelScope.
     private val browsers = mutableMapOf<String, RemoteBrowser>()
@@ -288,65 +290,74 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (book != null) onOpenBook(book.id) else onDownloadRemote(entry.path)
     }
 
-    override fun onDownloadRemote(path: String) {
-        val serverId = mutableState.value.selectedSftpServerId ?: return
-        val browser = browsers[serverId] ?: return
-        if (browser.transferJob?.isActive == true) return
-        val entry = browser.folder?.entries?.find { it.path == path && !it.isDirectory } ?: return
-        browser.transferMessage = "Descargando ${entry.name}"
-        browser.transferringPaths = setOf(path)
-        browser.transferProgress = null
-        val generation = ++browser.transferGeneration
-        publishRemote(serverId)
-        browser.transferJob = launchOperation {
-            try {
-                repository.downloadRemote(serverId, entry) { done, total ->
-                    viewModelScope.launch {
-                        if (browser.transferGeneration == generation && browser.transferMessage != null && browsers[serverId] === browser) {
-                            browser.transferProgress = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
-                            updateBusyMessage()
-                        }
-                    }
-                }
-            } finally {
-                browser.transferringPaths = emptySet()
-                browser.transferMessage = null
-                browser.transferProgress = null
-                withContext(NonCancellable) { reloadLibrary() }
-                publishRemote(serverId)
-            }
-        }
-    }
+    override fun onDownloadRemote(path: String) = onDownloadRemotePaths(listOf(path))
 
     override fun onDownloadAll() {
+        val folder = currentBrowser()?.folder ?: return
+        onDownloadRemotePaths(folder.entries.filter { !it.isDirectory }.map { it.path })
+    }
+
+    /** Queues downloads; they keep running in order while browsing other folders or servers. */
+    override fun onDownloadRemotePaths(paths: List<String>) {
         val serverId = mutableState.value.selectedSftpServerId ?: return
         val browser = browsers[serverId] ?: return
-        if (browser.transferJob?.isActive == true) return
         val folder = browser.folder ?: return
-        browser.transferMessage = "Descargando carpeta"
-        browser.transferringPaths = folder.entries.filter { !it.isDirectory && downloadedBooks[folder.sourceId to it.path] == null }.map { it.path }.toSet()
-        browser.transferProgress = 0f
+        val waiting = browser.queue.mapTo(HashSet()) { it.path } + browser.transferringPaths
+        val wanted = paths.toSet()
+        folder.entries.filter { !it.isDirectory && it.path in wanted && it.path !in waiting && downloadedBooks[folder.sourceId to it.path] == null }
+            .forEach { browser.queue.addLast(it) }
+        if (browser.transferJob?.isActive == true) {
+            browser.transferringPaths.firstOrNull()?.let { active ->
+                browser.transferMessage = downloadMessage(browser, active.substringAfterLast('/'))
+            }
+            publishRemote(serverId)
+        } else startDownloadQueue(serverId, browser)
+    }
+
+    private fun downloadMessage(browser: RemoteBrowser, name: String) =
+        if (browser.queue.isEmpty()) "Descargando $name" else "Descargando $name · ${browser.queue.size} en cola"
+
+    private fun startDownloadQueue(serverId: String, browser: RemoteBrowser) {
+        if (browser.queue.isEmpty()) return
         val generation = ++browser.transferGeneration
-        publishRemote(serverId)
         browser.transferJob = launchOperation {
+            var failed = 0
+            var lastError: Exception? = null
             try {
-                val result = repository.downloadAll(serverId, folder) { done, total ->
-                    viewModelScope.launch {
-                        if (browser.transferGeneration == generation && browser.transferMessage != null && browsers[serverId] === browser) {
-                            browser.transferProgress = if (total > 0) done.toFloat() / total else 1f
-                            updateBusyMessage()
-                            reloadLibrary()
-                            publishRemote(serverId)
+                // Browser state is main-thread only: no other code runs between taking the last
+                // entry and finishing, so a download queued meanwhile always starts a new run.
+                while (true) {
+                    val entry = browser.queue.removeFirstOrNull() ?: break
+                    browser.transferringPaths = setOf(entry.path)
+                    browser.transferMessage = downloadMessage(browser, entry.name)
+                    browser.transferProgress = null
+                    publishRemote(serverId)
+                    try {
+                        repository.downloadRemote(serverId, entry) { done, total ->
+                            viewModelScope.launch {
+                                if (browser.transferGeneration == generation && entry.path in browser.transferringPaths && browsers[serverId] === browser) {
+                                    browser.transferProgress = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
+                                    updateBusyMessage()
+                                }
+                            }
                         }
-                    }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) { failed += 1; lastError = error }
+                    // The book stays marked as downloading until the library knows its local copy.
+                    withContext(NonCancellable) { reloadLibrary() }
+                    browser.transferringPaths = emptySet()
+                    publishRemote(serverId)
                 }
-                if (result.failed > 0) mutableState.update { it.copy(error = "${serverName(serverId)}: ${result.failed} archivos no se han podido descargar") }
+                if (failed == 1) lastError?.let(::report)
+                else if (failed > 1) mutableState.update { it.copy(error = "${serverName(serverId)}: $failed archivos no se han podido descargar") }
             } finally {
-                browser.transferringPaths = emptySet()
-                browser.transferMessage = null
-                browser.transferProgress = null
-                withContext(NonCancellable) { reloadLibrary() }
-                publishRemote(serverId)
+                if (browser.transferGeneration == generation) {
+                    if (browser.queue.isNotEmpty() && !currentCoroutineContext().isActive) browser.queue.clear()
+                    browser.transferringPaths = emptySet()
+                    browser.transferMessage = null
+                    browser.transferProgress = null
+                    publishRemote(serverId)
+                }
             }
         }
     }
@@ -833,6 +844,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         UiRemoteEntry(entry.path, entry.name, entry.isDirectory, entry.title, entry.format, entry.size,
             entry.coverPath ?: book?.coverPath,
             downloaded = book != null, downloading = entry.path in browser.transferringPaths, progress = book?.let(::progress) ?: 0f,
+            queued = browser.queue.any { it.path == entry.path }, bookId = book?.id,
             fileCount = entry.fileCount)
     }
 

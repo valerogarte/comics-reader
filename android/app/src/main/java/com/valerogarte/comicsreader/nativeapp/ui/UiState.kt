@@ -64,6 +64,9 @@ data class UiRemoteEntry(
     val downloading: Boolean = false,
     val progress: Float = 0f,
     val fileCount: Int? = null,
+    val queued: Boolean = false,
+    /** Local copy of this remote file, when it has been downloaded. */
+    val bookId: String? = null,
 )
 
 data class UiSettings(
@@ -144,6 +147,7 @@ interface AppActions {
     fun onOpenRemoteBook(path: String) {}
     fun onDownloadRemote(path: String) {}
     fun onDownloadAll() {}
+    fun onDownloadRemotePaths(paths: List<String>) {}
     fun onSyncRemote() {}
     fun onShowSettings() {}
     fun onCloseSettings() {}
