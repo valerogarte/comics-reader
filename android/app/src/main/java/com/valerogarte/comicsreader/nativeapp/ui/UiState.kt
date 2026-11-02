@@ -78,6 +78,9 @@ data class UiSettings(
     val sftpServers: List<UiSftpServer> = emptyList(),
     val readingMode: ReaderMode = ReaderMode.HORIZONTAL,
     val readerTransition: ReaderTransition = ReaderTransition.SLIDE,
+    /** Only the choice is stored for now; no feature uses a provider yet. */
+    val aiProvider: String = "",
+    val aiModel: String = "",
 )
 
 data class UiReaderState(

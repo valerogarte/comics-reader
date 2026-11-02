@@ -21,7 +21,7 @@ La aplicación es exclusivamente Android nativa: Kotlin, Jetpack Compose, SQLite
 - Una descarga SFTP añade el libro a Libros y a la estantería de sus carpetas padre.
 - Las estanterías muestran únicamente archivos descargados.
 - El borrado local es definitivo. No existe papelera. Preguntar si se quiere eliminar una estantería que quede vacía.
-- Ajustes limitados a apariencia, fuentes y SFTP.
+- Ajustes limitados a apariencia, fuentes, lectura, SFTP e inteligencia artificial (proveedor y modelo; sin funciones que los usen todavía).
 - Configuración desde la cabecera; el pie del menú lateral abre Estadísticas de lectura.
 - Datos en almacenamiento privado Android; credenciales cifradas con Android Keystore. Nunca registrar contraseñas.
 - No borrar ni sobrescribir trabajo ajeno para simplificar cambios.

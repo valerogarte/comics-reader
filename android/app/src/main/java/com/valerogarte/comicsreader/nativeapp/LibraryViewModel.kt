@@ -900,6 +900,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         keepScreenOn = preferences.getBoolean("keepScreenOn", true), rightToLeft = preferences.getBoolean("rightToLeft", false),
         readingMode = runCatching { ReaderMode.valueOf(preferences.getString("readingMode", ReaderMode.HORIZONTAL.name)!!) }.getOrDefault(ReaderMode.HORIZONTAL),
         readerTransition = runCatching { ReaderTransition.valueOf(preferences.getString("readerTransition", ReaderTransition.SLIDE.name)!!) }.getOrDefault(ReaderTransition.SLIDE),
+        aiProvider = preferences.getString("aiProvider", "") ?: "", aiModel = preferences.getString("aiModel", "") ?: "",
     )
 
     private suspend fun writeAppearance(settings: UiSettings) = withContext(Dispatchers.IO) {
@@ -907,7 +908,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             .putString("font", settings.font).putFloat("fontSize", settings.fontSize).putString("fontPath", settings.fontPath)
             .putString("backgroundImagePath", settings.backgroundImagePath).putBoolean("keepScreenOn", settings.keepScreenOn)
             .putBoolean("rightToLeft", settings.rightToLeft).putString("readingMode", settings.readingMode.name)
-            .putString("readerTransition", settings.readerTransition.name).commit()) { "No se pudo guardar la apariencia" }
+            .putString("readerTransition", settings.readerTransition.name)
+            .putString("aiProvider", settings.aiProvider).putString("aiModel", settings.aiModel).commit()) { "No se pudo guardar la apariencia" }
     }
 
     private fun documentOptions(settings: UiSettings): DocumentOptions {

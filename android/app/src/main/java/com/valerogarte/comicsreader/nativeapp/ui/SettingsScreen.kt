@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Storage
@@ -45,7 +47,20 @@ private enum class SettingsSection(val id: String, val title: Int, val summary: 
     TYPOGRAPHY("typography", R.string.native_font, R.string.native_settings_typography_summary, Icons.Default.TextFields),
     READING("reading", R.string.native_settings_reading, R.string.native_settings_reading_summary, Icons.AutoMirrored.Filled.MenuBook),
     SFTP("sftp", R.string.native_sftp_servers, R.string.native_settings_sftp_summary, Icons.Default.Storage),
+    AI("ai", R.string.native_ai, R.string.native_settings_ai_summary, Icons.Default.AutoAwesome),
 }
+
+/** Provider ids with suggested models; any model name can also be typed. */
+private val aiProviders = listOf(
+    "" to R.string.native_ai_none,
+    "anthropic" to R.string.native_ai_anthropic,
+    "openai" to R.string.native_ai_openai,
+    "google" to R.string.native_ai_google,
+    "ollama" to R.string.native_ai_ollama,
+)
+private val aiModelSuggestions = mapOf(
+    "anthropic" to listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,6 +134,7 @@ internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
                                     SettingSwitch(stringResource(R.string.native_keep_screen_on), settings.keepScreenOn) { value -> actions.onUpdateAppearanceSettings { it.copy(keepScreenOn = value) } }
                                     SettingSwitch(stringResource(R.string.native_right_to_left), settings.rightToLeft) { value -> actions.onUpdateAppearanceSettings { it.copy(rightToLeft = value) } }
                                 }
+                                SettingsSection.AI -> AiSettings(settings, actions)
                                 SettingsSection.SFTP -> {
                                     Text(stringResource(R.string.native_sftp_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if (!validServers) Text(stringResource(R.string.native_invalid_servers), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -172,6 +188,35 @@ internal fun SettingsScreen(settings: UiSettings, actions: AppActions) {
             }) { Text(stringResource(R.string.native_delete), color = MaterialTheme.colorScheme.error) } },
             dismissButton = { TextButton(onClick = { deletingServer = null }) { Text(stringResource(R.string.native_cancel)) } },
         )
+    }
+}
+
+@Composable
+private fun AiSettings(settings: UiSettings, actions: AppActions) {
+    Text(stringResource(R.string.native_ai_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ChoiceRow(stringResource(R.string.native_ai_provider), settings.aiProvider, aiProviders.map { (id, label) -> id to stringResource(label) }) { provider ->
+        actions.onUpdateAppearanceSettings { it.copy(aiProvider = provider, aiModel = aiModelSuggestions[provider]?.first().orEmpty()) }
+    }
+    if (settings.aiProvider.isNotEmpty()) {
+        val suggestions = aiModelSuggestions[settings.aiProvider].orEmpty()
+        var expanded by remember { mutableStateOf(false) }
+        Box {
+            OutlinedTextField(settings.aiModel, onValueChange = { value -> actions.onUpdateAppearanceSettings { it.copy(aiModel = value.trim()) } },
+                label = { Text(stringResource(R.string.native_ai_model)) }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("ai_model"),
+                supportingText = { Text(stringResource(R.string.native_ai_model_hint)) },
+                trailingIcon = if (suggestions.isEmpty()) null else { {
+                    IconButton(onClick = { expanded = true }) { Icon(Icons.Default.ArrowDropDown, stringResource(R.string.native_ai_models)) }
+                } })
+            DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+                suggestions.forEach { model ->
+                    DropdownMenuItem(text = { Text(model) }, onClick = {
+                        actions.onUpdateAppearanceSettings { it.copy(aiModel = model) }
+                        expanded = false
+                    })
+                }
+            }
+        }
     }
 }
 
