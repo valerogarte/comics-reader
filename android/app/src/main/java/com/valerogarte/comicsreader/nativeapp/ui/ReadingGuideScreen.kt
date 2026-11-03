@@ -1,7 +1,9 @@
 package com.valerogarte.comicsreader.nativeapp.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -11,6 +13,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +45,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.valerogarte.comicsreader.R
+import kotlinx.coroutines.launch
 
 private val ReadGreen = Color(0xFF2E8B57)
 private val ReadingAmber = Color(0xFFE0A030)
@@ -53,7 +61,7 @@ private enum class GuideFilter { ALL, TO_READ, READ, MISSING }
 
 /** A reading order: progress at a glance, the next book to read, and every gap still to obtain. */
 @Composable
-internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modifier: Modifier = Modifier) {
+internal fun ReadingGuideContent(guide: UiGuideView?, covers: List<String>, actions: AppActions, modifier: Modifier = Modifier) {
     if (guide == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -63,6 +71,7 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
     // book or a server folder is shown, so Back returns to the same section and scroll.
     val collapsed = rememberSaveable(guide.id, saver = sectionToggles) { mutableStateMapOf() }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val items = guide.items
     val read = items.count { it.status == GuideItemStatus.READ }
     val missing = items.count { it.status == GuideItemStatus.MISSING }
@@ -71,7 +80,7 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
         ?: items.firstOrNull { it.status == GuideItemStatus.AVAILABLE || it.status == GuideItemStatus.PARTIAL }
     val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === next } }
     LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
-        item(key = "hero") { GuideHero(guide, read, available, missing, items.size) }
+        item(key = "hero") { GuideHero(guide, covers, read, available, missing, items.size) }
         if (guide.checking) item(key = "checking") {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
@@ -100,8 +109,20 @@ internal fun ReadingGuideContent(guide: UiGuideView?, actions: AppActions, modif
             val visible = section.items.filter { filter.matches(it) }
             if (visible.isEmpty()) return@forEachIndexed
             val isCollapsed = collapsed[index] ?: (index != activeSection)
-            item(key = "section:$index") {
-                SectionHeader(section, isCollapsed, onDownload = { actions.onDownloadGuideSection(index) }) { collapsed[index] = !isCollapsed }
+            // Every header is sticky: an open one stays under the top bar while its books scroll,
+            // a closed one is pushed away at once by the next header, as a plain row would be.
+            stickyHeader(key = "section:$index") { position ->
+                val pinned by remember(position) {
+                    derivedStateOf {
+                        listState.firstVisibleItemIndex > position ||
+                            listState.firstVisibleItemIndex == position && listState.firstVisibleItemScrollOffset > 0
+                    }
+                }
+                SectionHeader(section, isCollapsed, pinned = pinned && !isCollapsed, onDownload = { actions.onDownloadGuideSection(index) }) {
+                    collapsed[index] = !isCollapsed
+                    // Closing it from the top keeps the header in sight instead of landing further down the guide.
+                    if (!isCollapsed && pinned) scope.launch { listState.scrollToItem(position) }
+                }
             }
             if (!isCollapsed) {
                 val list = visible
@@ -119,6 +140,9 @@ private val sectionToggles = listSaver<SnapshotStateMap<Int, Boolean>, Int>(
     restore = { saved -> mutableStateMapOf<Int, Boolean>().apply { saved.chunked(2).forEach { (index, closed) -> put(index, closed == 1) } } },
 )
 
+/** A whole percentage that does not show 0 once something is read. */
+private fun percentRead(fraction: Float, anyRead: Boolean) = (fraction * 100).toInt().let { if (anyRead) it.coerceAtLeast(1) else it }
+
 /** An approximate time: minutes up to an hour, then hours and minutes, then whole hours. */
 internal fun readingTime(minutes: Int): String = when {
     minutes < 60 -> "$minutes min"
@@ -132,16 +156,17 @@ internal fun readingTime(minutes: Int): String = when {
 /** Every reading guide of the servers, with a star to show it in the side menu. */
 @Composable
 internal fun ReadingGuideList(guides: List<UiGuideSummary>, syncing: Boolean, actions: AppActions, modifier: Modifier = Modifier) {
-    LazyColumn(modifier.fillMaxSize().testTag("reading_guides"), contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (syncing) item(key = "syncing") {
+    // One column on a phone or a tablet upright, more side by side when there is room.
+    LazyVerticalGrid(GridCells.Adaptive(340.dp), modifier.fillMaxSize().testTag("reading_guides"), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (syncing) item(key = "syncing", span = { GridItemSpan(maxLineSpan) }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                 Text(stringResource(R.string.native_guides_syncing), style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp))
             }
         }
-        if (guides.isEmpty() && !syncing) item(key = "empty") {
+        if (guides.isEmpty() && !syncing) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
             Column(Modifier.fillMaxWidth().padding(top = 96.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.AutoStories, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(stringResource(R.string.native_guides_empty), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
@@ -149,37 +174,135 @@ internal fun ReadingGuideList(guides: List<UiGuideSummary>, syncing: Boolean, ac
                     color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        items(guides, key = { it.id }) { guide -> GuideCard(guide, actions) }
+        gridItems(guides, key = { it.id }) { guide -> GuideCard(guide, actions, Modifier.animateItem()) }
     }
 }
 
 @Composable
-private fun GuideCard(guide: UiGuideSummary, actions: AppActions) {
-    val primary = MaterialTheme.colorScheme.primary
-    ElevatedCard(onClick = { actions.onOpenGuide(guide.id) }, shape = RoundedCornerShape(22.dp),
-        modifier = Modifier.fillMaxWidth().testTag("guide_card:${guide.id}")) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
-                .background(Brush.linearGradient(listOf(lerp(primary, Color.Black, .45f), primary))), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AutoStories, null, tint = Color.White, modifier = Modifier.size(26.dp))
-            }
-            Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(guide.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (guide.description.isNotBlank()) Text(guide.description, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill(stringResource(R.string.native_guide_entries, guide.itemCount), primary)
-                    guide.readingMinutes?.let { Pill("≈ ${readingTime(it)}", MaterialTheme.colorScheme.secondary) }
-                    guide.fileName?.let { Pill(listOfNotNull(guide.serverName, it).joinToString(" · "), MaterialTheme.colorScheme.outline) }
-                }
-            }
-            IconButton(onClick = { actions.onToggleGuideFavorite(guide.id) }, modifier = Modifier.testTag("favorite:${guide.id}")) {
+private fun GuideCard(guide: UiGuideSummary, actions: AppActions, modifier: Modifier = Modifier) {
+    ElevatedCard(onClick = { actions.onOpenGuide(guide.id) }, shape = RoundedCornerShape(24.dp),
+        modifier = modifier.fillMaxWidth().testTag("guide_card:${guide.id}")) {
+        Box(Modifier.fillMaxWidth().height(156.dp)) {
+            GuideCoverStrip(guide.covers, Modifier.matchParentSize())
+            // Darker towards the bottom, so the title reads over any cover.
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = .1f), .45f to Color.Black.copy(alpha = .35f), 1f to Color.Black.copy(alpha = .88f))))
+            Text(guide.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, end = 18.dp, bottom = 14.dp))
+            IconButton(onClick = { actions.onToggleGuideFavorite(guide.id) },
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(40.dp)
+                    .background(Color.Black.copy(alpha = .4f), CircleShape).testTag("favorite:${guide.id}")) {
                 Icon(if (guide.favorite) Icons.Default.Star else Icons.Default.StarBorder,
                     stringResource(if (guide.favorite) R.string.native_guide_unfavorite else R.string.native_guide_favorite),
-                    tint = if (guide.favorite) ReadingAmber else MaterialTheme.colorScheme.onSurfaceVariant)
+                    tint = if (guide.favorite) ReadingAmber else Color.White)
             }
         }
+        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (guide.description.isNotBlank()) Text(guide.description, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            GuideProgress(guide)
+            GuideNext(guide)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Pill(stringResource(R.string.native_guide_entries, guide.itemCount), MaterialTheme.colorScheme.primary)
+                if (guide.sectionCount > 0) Pill(pluralStringResource(R.plurals.native_guide_sections, guide.sectionCount, guide.sectionCount),
+                    MaterialTheme.colorScheme.secondary)
+                guide.fileName?.let { Pill(listOfNotNull(guide.serverName, it).joinToString(" · "), MaterialTheme.colorScheme.outline) }
+            }
+        }
+    }
+}
+
+/** The guide's covers side by side; without any yet, its colour and icon. */
+@Composable
+private fun GuideCoverStrip(covers: List<String>, modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    if (covers.isEmpty()) Box(modifier.background(Brush.linearGradient(listOf(lerp(primary, Color.Black, .55f), primary)))) {
+        Icon(Icons.Default.AutoStories, null, tint = Color.White.copy(alpha = .5f), modifier = Modifier.padding(18.dp).size(40.dp))
+    } else Row(modifier.background(Color.Black), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        covers.forEach { CoverImage(it, "", Modifier.weight(1f).fillMaxHeight()) }
+    }
+}
+
+@Composable
+private fun GuideProgress(guide: UiGuideSummary) {
+    val percent = percentRead(guide.progress, guide.readCount > 0)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LinearProgressIndicator(progress = { guide.progress }, color = ReadGreen, trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                drawStopIndicator = {}, gapSize = 0.dp, modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(50)))
+            Text("$percent%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.native_guide_read_of, guide.readCount, guide.itemCount), style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            guide.readingMinutes?.let { minutes ->
+                Icon(Icons.Default.Schedule, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                val left = guide.remainingMinutes?.takeIf { it < minutes && readingTime(it) != readingTime(minutes) }
+                Text(listOfNotNull("≈ ${readingTime(minutes)}", left?.let { stringResource(R.string.native_guide_time_left, readingTime(it)) })
+                    .joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+    }
+}
+
+/** The entry to read next or, once every entry is read, that the guide is complete. */
+@Composable
+private fun GuideNext(guide: UiGuideSummary) {
+    val complete = guide.itemCount > 0 && guide.readCount >= guide.itemCount
+    val title = guide.nextTitle
+    if (!complete && title == null) return
+    val color = when { complete -> ReadGreen; guide.nextStarted -> ReadingAmber; else -> MaterialTheme.colorScheme.primary }
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = .1f))
+        .padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (complete) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.MenuBook, null, tint = color, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            if (complete) Text(stringResource(R.string.native_guide_completed), style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold, color = color)
+            else {
+                Text(stringResource(if (guide.nextStarted) R.string.native_guide_continue else R.string.native_guide_next).uppercase(),
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = color)
+                Text(title.orEmpty(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A favourite guide in the side menu: its covers, its title and how much of it is read. */
+@Composable
+internal fun FavoriteGuideItem(guide: UiGuideSummary, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(selected = selected, onClick = onClick, shape = RoundedCornerShape(18.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            GuideThumbnail(guide.covers, Modifier.size(width = 38.dp, height = 56.dp))
+            Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(guide.title, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(progress = { guide.progress }, color = ReadGreen,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest, drawStopIndicator = {}, gapSize = 0.dp,
+                        modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(50)))
+                    Text("${guide.readCount}/${guide.itemCount}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Two covers of the guide, one tilted behind the other like a small pile. */
+@Composable
+private fun GuideThumbnail(covers: List<String>, modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(5.dp)
+    Box(modifier) {
+        covers.getOrNull(1)?.let { CoverImage(it, "", Modifier.matchParentSize().offset(x = 5.dp, y = (-2).dp).rotate(8f).clip(shape)) }
+        if (covers.isEmpty()) Box(Modifier.matchParentSize().clip(shape)
+            .background(Brush.linearGradient(listOf(lerp(primary, Color.Black, .45f), primary))), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.AutoStories, null, tint = Color.White, modifier = Modifier.size(20.dp))
+        } else CoverImage(covers.first(), "", Modifier.matchParentSize().shadow(4.dp, shape).clip(shape))
     }
 }
 
@@ -198,17 +321,15 @@ private fun GuideFilter.matches(item: UiGuideItem) = when (this) {
 }
 
 @Composable
-private fun GuideHero(guide: UiGuideView, read: Int, available: Int, missing: Int, total: Int) {
-    val primary = MaterialTheme.colorScheme.primary
-    val deep = lerp(primary, Color.Black, .45f)
+private fun GuideHero(guide: UiGuideView, covers: List<String>, read: Int, available: Int, missing: Int, total: Int) {
     val fraction = if (total > 0) read.toFloat() / total else 0f
     val animated by animateFloatAsState(fraction, tween(900), label = "guide-progress")
     Box(Modifier.fillMaxWidth().padding(16.dp).shadow(10.dp, RoundedCornerShape(28.dp))
-        .clip(RoundedCornerShape(28.dp))
-        .background(Brush.linearGradient(listOf(deep, primary, lerp(primary, Color(0xFFFFE0A3), .35f))))) {
-        // Soft light shapes give the card depth without an image.
-        Box(Modifier.align(Alignment.TopEnd).offset(x = 40.dp, y = (-50).dp).size(180.dp).background(Color.White.copy(alpha = .08f), CircleShape))
-        Box(Modifier.align(Alignment.BottomStart).offset(x = (-30).dp, y = 40.dp).size(120.dp).background(Color.White.copy(alpha = .06f), CircleShape))
+        .clip(RoundedCornerShape(28.dp))) {
+        // The same covers as in the list of guides, darkened so the white text reads over any of them.
+        GuideCoverStrip(covers, Modifier.matchParentSize())
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(
+            0f to Color.Black.copy(alpha = .82f), .65f to Color.Black.copy(alpha = .62f), 1f to Color.Black.copy(alpha = .5f))))
         Row(Modifier.fillMaxWidth().padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -244,7 +365,7 @@ private fun GuideHero(guide: UiGuideView, read: Int, available: Int, missing: In
                     drawArc(Color.White, -90f, 360f * animated, false, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${(animated * 100).toInt()}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("${percentRead(animated, read > 0)}%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                     Text("$read/$total", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = .8f))
                 }
             }
@@ -266,10 +387,13 @@ private fun NextReading(item: UiGuideItem, actions: AppActions) {
     val target = item.files.firstOrNull { it.progress < 1f && it.available != false } ?: item.files.firstOrNull()
     ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(22.dp)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                CoverImage(item.coverPath, item.title, Modifier.size(width = 86.dp, height = 129.dp).shadow(8.dp, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp)))
+            // Fixed to the cover's size, so the progress bar below it cannot take the text's width.
+            Box(Modifier.size(width = 86.dp, height = 129.dp)) {
+                CoverImage(item.coverPath, item.title, Modifier.matchParentSize().shadow(8.dp, RoundedCornerShape(8.dp)).clip(RoundedCornerShape(8.dp)))
                 if (item.progress > 0f) LinearProgressIndicator(progress = { item.progress }, color = ReadingAmber,
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp))
+                    trackColor = Color.Black.copy(alpha = .45f), drawStopIndicator = {}, gapSize = 0.dp,
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(4.dp)
+                        .clip(RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
             }
             Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(if (item.status == GuideItemStatus.READING) R.string.native_guide_continue else R.string.native_guide_next).uppercase(),
@@ -291,34 +415,39 @@ private fun NextReading(item: UiGuideItem, actions: AppActions) {
 }
 
 @Composable
-private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, onDownload: () -> Unit, onToggle: () -> Unit) {
+private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, pinned: Boolean, onDownload: () -> Unit, onToggle: () -> Unit) {
     val done = section.items.count { it.status == GuideItemStatus.READ }
     val files = section.items.flatMap { it.files }
     val pending = files.count { it.bookId == null && it.available != false }
     val downloading = files.any { it.downloading }
     val total = section.items.size
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "section-arrow")
-    Column(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Download state leads the header, before the title and its number.
-            when {
-                downloading -> CircularProgressIndicator(Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp), strokeWidth = 2.dp)
-                pending > 0 -> FilledTonalIconButton(onClick = onDownload, modifier = Modifier.padding(end = 10.dp).size(36.dp)) {
-                    Icon(Icons.Default.Download, stringResource(R.string.native_guide_download_section, pending), Modifier.size(18.dp))
+    // Pinned under the top bar it needs its own background, so the books scrolling below do not show through.
+    val background by animateColorAsState(if (pinned) MaterialTheme.colorScheme.background else Color.Transparent, label = "section-background")
+    val shadow by animateDpAsState(if (pinned) 6.dp else 0.dp, label = "section-shadow")
+    Surface(color = background, contentColor = LocalContentColor.current, shadowElevation = shadow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(start = 20.dp, end = 16.dp, top = 22.dp, bottom = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Download state leads the header, before the title and its number.
+                when {
+                    downloading -> CircularProgressIndicator(Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp), strokeWidth = 2.dp)
+                    pending > 0 -> FilledTonalIconButton(onClick = onDownload, modifier = Modifier.padding(end = 10.dp).size(36.dp)) {
+                        Icon(Icons.Default.Download, stringResource(R.string.native_guide_download_section, pending), Modifier.size(18.dp))
+                    }
+                    files.isNotEmpty() -> Icon(Icons.Default.DownloadDone, stringResource(R.string.native_guide_section_downloaded),
+                        tint = ReadGreen, modifier = Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp))
                 }
-                files.isNotEmpty() -> Icon(Icons.Default.DownloadDone, stringResource(R.string.native_guide_section_downloaded),
-                    tint = ReadGreen, modifier = Modifier.padding(start = 8.dp, end = 18.dp).size(20.dp))
+                Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                section.readingMinutes?.let { Text("≈ ${readingTime(it)} · ", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Default.ExpandMore, null, Modifier.padding(start = 6.dp).rotate(rotation))
             }
-            Text(section.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            section.readingMinutes?.let { Text("≈ ${readingTime(it)} · ", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text("$done/$total", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Icon(Icons.Default.ExpandMore, null, Modifier.padding(start = 6.dp).rotate(rotation))
+            LinearProgressIndicator(progress = { if (total > 0) done.toFloat() / total else 0f }, color = ReadGreen,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(5.dp).clip(RoundedCornerShape(50)))
         }
-        LinearProgressIndicator(progress = { if (total > 0) done.toFloat() / total else 0f }, color = ReadGreen,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(5.dp).clip(RoundedCornerShape(50)))
     }
 }
 

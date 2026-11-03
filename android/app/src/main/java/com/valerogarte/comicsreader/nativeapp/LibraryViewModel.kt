@@ -474,8 +474,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private data class GuideContext(val guide: ReadingGuide, val profile: String?, val sourceId: String?, val root: String)
 
-    private suspend fun loadGuideContext(id: String): GuideContext? {
-        val stored = storedGuides.find { it.id == id } ?: return null
+    private suspend fun loadGuideContext(id: String): GuideContext? = storedGuides.find { it.id == id }?.let { guideContext(it) }
+
+    private suspend fun guideContext(stored: StoredGuide): GuideContext? {
         val guide = parsedGuide(stored) ?: return null
         val servers = mutableState.value.settings.sftpServers
         // A guide belongs to the server it was read from; "server" in the JSON is only a fallback.
@@ -527,6 +528,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 showGuide(id, false)
+                // The folders just read may bring the covers and availability the list shows.
+                refreshGuideSummary(id)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { report(error) }
         }
@@ -579,6 +582,83 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val serverName = context.profile?.let(::serverName)
         val minutes = context.guide.readingMinutes ?: context.guide.items.mapNotNull { it.readingMinutes }.takeIf { it.isNotEmpty() }?.sum()
         return UiGuideView(id, context.guide.title, context.guide.description, serverName, sections, checking, minutes)
+    }
+
+    /**
+     * What the guide list and the side menu show of a guide: its progress from the books on the
+     * device and the reading log, the entry to read next and a few covers spread along it. Only
+     * the folders already cached are consulted; nothing is read from the server.
+     */
+    private suspend fun guideSummary(stored: StoredGuide, favorites: Set<String>, avoid: Set<String>): UiGuideSummary = withContext(Dispatchers.IO) {
+        val context = guideContext(stored)
+        val guide = context?.guide
+        val summary = UiGuideSummary(stored.id, stored.title, guide?.items?.size ?: 0, guide?.description.orEmpty(),
+            guide?.let { it.readingMinutes ?: it.items.mapNotNull { item -> item.readingMinutes }.takeIf { m -> m.isNotEmpty() }?.sum() },
+            favorite = stored.id in favorites, fileName = stored.remotePath?.substringAfterLast('/'),
+            serverName = stored.profileId?.let(::serverName), sectionCount = guide?.sections?.size ?: 0)
+        val sourceId = context?.sourceId ?: return@withContext summary
+        val logs = readingLog.filter { it.sourceId == sourceId && it.remotePath != null }.associateBy { requireNotNull(it.remotePath) }
+        val items = context.guide.items
+        val paths = items.map { item -> item.files.map { guideRelativePath(it, context.root) } }
+        val progress = paths.map { files ->
+            files.map { path ->
+                downloadedBooks[sourceId to path]?.let(::progress) ?: logs[path]?.let { log ->
+                    when { log.finishedAt != null -> 1f; log.startedAt != null -> 0.5f; else -> 0f }
+                } ?: 0f
+            }
+        }
+        val read = progress.count { it.isNotEmpty() && it.all { value -> value >= 1f } }
+        val remaining = items.indices.mapNotNull { index ->
+            items[index].readingMinutes?.let { minutes -> minutes * (1f - (progress[index].takeIf { it.isNotEmpty() }?.average()?.toFloat() ?: 0f)) }
+        }.takeIf { it.isNotEmpty() }?.sum()?.toInt()
+        // The same choice as the guide's "next reading": the entry begun, or the first one on the server.
+        val started = progress.indexOfFirst { values -> values.any { it > 0f } && !values.all { it >= 1f } }
+        val next = started.takeIf { it >= 0 } ?: items.indices.firstOrNull { index ->
+            paths[index].isNotEmpty() && !progress[index].all { it >= 1f } &&
+                paths[index].any { downloadedBooks[sourceId to it] != null || repository.cachedRemoteEntry(sourceId, it) != null }
+        }
+        summary.copy(readCount = read, remainingMinutes = remaining,
+            nextTitle = next?.let { listOf(items[it].number, items[it].title).filter(String::isNotBlank).joinToString(". ") },
+            nextStarted = started >= 0, covers = guideCovers(sourceId, paths, logs, avoid))
+    }
+
+    /**
+     * Up to [count] distinct covers, one from each stretch of the guide so they show its whole span.
+     * Covers in [avoid], those of the guides listed before, are taken only when a stretch has no other,
+     * so guides that start alike still look different.
+     */
+    private suspend fun guideCovers(sourceId: String, paths: List<List<String>>, logs: Map<String, ReadingLogEntry>,
+                                    avoid: Set<String>, count: Int = 6): List<String> {
+        val covers = LinkedHashSet<String>()
+        if (paths.isEmpty()) return emptyList()
+        for (stretch in 0 until count) {
+            val start = stretch * paths.size / count
+            val end = ((stretch + 1) * paths.size / count).coerceAtMost(start + 8)
+            var fallback: String? = null
+            for (index in start until end) {
+                val path = paths[index].firstOrNull() ?: continue
+                val cover = downloadedBooks[sourceId to path]?.coverPath ?: logs[path]?.coverPath
+                    ?: repository.cachedRemoteEntry(sourceId, path)?.coverPath
+                if (cover == null || cover in covers || !File(cover.removePrefix("file://")).isFile) continue
+                if (cover !in avoid) { fallback = null; covers += cover; break }
+                if (fallback == null) fallback = cover
+            }
+            fallback?.let { covers += it }
+        }
+        return covers.toList()
+    }
+
+    private suspend fun guideSummaries(stored: List<StoredGuide>): List<UiGuideSummary> {
+        val favorites = favoriteGuides()
+        val used = HashSet<String>()
+        return stored.map { guide -> guideSummary(guide, favorites, used).also { used += it.covers } }
+    }
+
+    private suspend fun refreshGuideSummary(id: String) {
+        val stored = storedGuides.find { it.id == id } ?: return
+        val before = mutableState.value.guides.takeWhile { it.id != id }.flatMapTo(HashSet()) { it.covers }
+        val summary = guideSummary(stored, favoriteGuides(), before)
+        mutableState.update { state -> state.copy(guides = state.guides.map { if (it.id == id) summary else it }) }
     }
 
     override fun onDeleteShelf(id: String) {
@@ -1189,14 +1269,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val stored = repository.loadGuides()
         storedGuides = stored
         parsedGuides.keys.retainAll(stored.mapTo(HashSet()) { it.id })
-        val favorites = favoriteGuides()
-        val guides = stored.map { guide ->
-            val parsed = parsedGuide(guide)
-            UiGuideSummary(guide.id, guide.title, parsed?.items?.size ?: 0, parsed?.description.orEmpty(),
-                parsed?.let { it.readingMinutes ?: it.items.mapNotNull { item -> item.readingMinutes }.takeIf { m -> m.isNotEmpty() }?.sum() },
-                favorite = guide.id in favorites, fileName = guide.remotePath?.substringAfterLast('/'),
-                serverName = guide.profileId?.let(::serverName))
-        }
         val downloads = withContext(Dispatchers.IO) {
             loadedBooks.filter { it.sourceId != null && it.remotePath != null && File(it.localPath).isFile }
                 .associateBy { requireNotNull(it.sourceId) to requireNotNull(it.remotePath) }
@@ -1205,6 +1277,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         downloadedBooks = downloads
         this.readingLog = readingLog
         shelfPaths = paths
+        val guides = guideSummaries(stored)
         mutableState.update {
             val selectedShelf = it.selectedShelfId?.takeIf { id -> paths.any { shelf -> shelf.id == id } }
             val selectedGuide = it.selectedGuideId?.takeIf { id -> guides.any { guide -> guide.id == id } }

@@ -156,7 +156,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
     val remoteBooks = if (server != null) state.remoteEntries.filter { !it.isDirectory && matchesFilter(it.progress, filter) } else emptyList()
     val folders = if (server != null) state.remoteEntries.filter { it.isDirectory } else emptyList()
     val title = when (state.destination) {
-        LibraryDestination.BOOKS -> stringResource(R.string.native_books)
+        LibraryDestination.BOOKS -> stringResource(R.string.native_collection)
         LibraryDestination.SFTP -> server?.name ?: stringResource(R.string.native_sftp_library)
         LibraryDestination.SHELF -> shelfPath?.name ?: stringResource(R.string.native_shelves)
         LibraryDestination.GUIDES -> stringResource(R.string.native_reading_guides)
@@ -283,7 +283,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 }
                 LazyColumn(Modifier.weight(1f)) {
                 item { NavigationDrawerItem(
-                    label = { Text(stringResource(R.string.native_books)) },
+                    label = { Text(stringResource(R.string.native_collection)) },
                     icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, null) },
                     selected = state.destination == LibraryDestination.BOOKS,
                     onClick = { actions.onNavigate(LibraryDestination.BOOKS); scope.launch { drawer.close() } },
@@ -342,14 +342,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 }
                         // Only favourites here; the full list, with the stars, is "Todas las guías".
                         items(state.guides.filter { it.favorite }, key = { "guide:${it.id}" }) { item ->
-                            NavigationDrawerItem(
-                                label = { Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                                icon = { Icon(Icons.Default.Star, null) },
-                                badge = { Text("${item.itemCount}", style = MaterialTheme.typography.labelMedium) },
-                                selected = isGuide && item.id == state.selectedGuideId,
+                            FavoriteGuideItem(item, selected = isGuide && item.id == state.selectedGuideId,
                                 onClick = { actions.onOpenGuide(item.id); scope.launch { drawer.close() } },
-                                modifier = Modifier.padding(horizontal = 12.dp).testTag("guide:${item.id}"),
-                            )
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp).testTag("guide:${item.id}"))
                         }
                 }
                 NavigationDrawerItem(
@@ -469,7 +464,8 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                 if (isGuideList) {
                     ReadingGuideList(state.guides, state.guidesSyncing, actions)
                 } else if (isGuide) {
-                    guideStates.SaveableStateProvider("guide:${state.selectedGuideId}") { ReadingGuideContent(state.guide, actions) }
+                    val covers = state.guides.find { it.id == state.selectedGuideId }?.covers.orEmpty()
+                    guideStates.SaveableStateProvider("guide:${state.selectedGuideId}") { ReadingGuideContent(state.guide, covers, actions) }
                 } else if (isRemote && state.settings.sftpServers.isEmpty()) {
                     EmptyLibrary(Icons.Default.Storage, stringResource(R.string.native_configure_sftp), stringResource(R.string.native_configure_sftp_detail), actions::onShowSettings, R.string.native_configure_sftp)
                 } else if (isRemote && server == null) {

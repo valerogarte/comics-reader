@@ -37,7 +37,18 @@ data class UiGuideSummary(
     /** The guide's file in the server's root folder. */
     val fileName: String? = null,
     val serverName: String? = null,
-)
+    val sectionCount: Int = 0,
+    /** Entries whose books are all read. */
+    val readCount: Int = 0,
+    val remainingMinutes: Int? = null,
+    /** The entry being read or, if none, the first one still to read that is on the server. */
+    val nextTitle: String? = null,
+    val nextStarted: Boolean = false,
+    /** A few covers spread along the guide, to recognise it at a glance. */
+    val covers: List<String> = emptyList(),
+) {
+    val progress get() = if (itemCount > 0) readCount.toFloat() / itemCount else 0f
+}
 
 enum class GuideItemStatus { READ, READING, AVAILABLE, PARTIAL, MISSING, UNKNOWN }
 

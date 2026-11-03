@@ -14,6 +14,7 @@
     <string name="native_transition_reveal">Revelar</string>
     <string name="native_transition_zoom">Zoom suave</string>
     <string name="native_books">Libros</string>
+    <string name="native_collection">Colección</string>
     <string name="native_sftp_library">Biblioteca SFTP</string>
     <string name="native_shelves">Estanterías</string>
     <string name="native_create_shelf">Nueva estantería</string>
@@ -115,7 +116,7 @@
     <string name="native_edit_sftp_server">Editar servidor</string>
     <string name="native_server_name">Nombre del servidor</string>
     <string name="native_delete_sftp_server">Borrar servidor</string>
-    <string name="native_delete_sftp_server_message">Se eliminará «%1$s» de tus servidores SFTP. Los libros que hayas descargado se conservarán en Libros y en sus estanterías.</string>
+    <string name="native_delete_sftp_server_message">Se eliminará «%1$s» de tus servidores SFTP. Los libros que hayas descargado se conservarán en la Colección y en sus estanterías.</string>
     <string name="native_no_sftp_servers">Aún no has añadido servidores.</string>
     <string name="native_apply">Aplicar</string>
     <string name="native_required">Obligatorio</string>
@@ -186,6 +187,12 @@
     <string name="native_guide_favorite">Añadir a favoritas</string>
     <string name="native_guide_unfavorite">Quitar de favoritas</string>
     <string name="native_guide_entries">%1$d lecturas</string>
+    <plurals name="native_guide_sections">
+        <item quantity="one">%1$d sección</item>
+        <item quantity="other">%1$d secciones</item>
+    </plurals>
+    <string name="native_guide_read_of">%1$d de %2$d leídas</string>
+    <string name="native_guide_completed">Guía completada</string>
     <string name="native_guide_time">≈ %1$s de lectura</string>
     <string name="native_guide_time_left">quedan %1$s</string>
     <string name="native_shelves_empty_hint">Abre una carpeta del servidor y pulsa «Añadir a estanterías».</string>
