@@ -518,10 +518,15 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                 val profile = context.profile
                 val sourceId = context.sourceId
                 if (profile != null && sourceId != null) {
-                    val folders = context.guide.items.flatMap { it.files }.map { remoteParentPath(guideRelativePath(it, context.root)) }.distinct()
-                    for (folder in folders) {
-                        if (!refresh && repository.isFolderCached(sourceId, folder)) continue
-                        try { repository.loadRemoteFolder(profile, folder, refresh) }
+                    val wanted = context.guide.items.flatMap { it.files }.map { guideRelativePath(it, context.root) }.distinct()
+                    val folders = wanted.groupBy(::remoteParentPath)
+                    for ((folder, paths) in folders) {
+                        // A cached listing is enough only while it still has every file the guide names:
+                        // files renamed or added on the server since then make it read the folder again.
+                        val cached = repository.isFolderCached(sourceId, folder)
+                        val stale = cached && paths.any { repository.cachedRemoteEntry(sourceId, it) == null }
+                        if (!refresh && cached && !stale) continue
+                        try { repository.loadRemoteFolder(profile, folder, refresh || stale) }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) { }
                         showGuide(id, true)
