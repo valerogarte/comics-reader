@@ -78,7 +78,13 @@ internal fun ReadingGuideContent(guide: UiGuideView?, covers: List<String>, acti
     val available = items.count { it.status in setOf(GuideItemStatus.AVAILABLE, GuideItemStatus.READING, GuideItemStatus.PARTIAL) }
     val next = items.firstOrNull { it.status == GuideItemStatus.READING }
         ?: items.firstOrNull { it.status == GuideItemStatus.AVAILABLE || it.status == GuideItemStatus.PARTIAL }
-    val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === next } }
+    // The section open by default is the one being read or, failing that, the one holding the
+    // first entry not read after the last one read, even if that entry is still to obtain.
+    val lastRead = items.indexOfLast { it.status == GuideItemStatus.READ }
+    val current = items.firstOrNull { it.status == GuideItemStatus.READING }
+        ?: items.drop(lastRead + 1).firstOrNull { it.status != GuideItemStatus.READ }
+        ?: items.firstOrNull { it.status != GuideItemStatus.READ }
+    val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === current } }
     LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "hero") { GuideHero(guide, covers, read, available, missing, items.size) }
         if (guide.checking) item(key = "checking") {
