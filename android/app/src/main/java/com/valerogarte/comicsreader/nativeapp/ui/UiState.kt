@@ -193,6 +193,8 @@ data class AppUiState(
     val guidesSyncing: Boolean = false,
     val selectedGuideId: String? = null,
     val guide: UiGuideView? = null,
+    /** Guide entries whose read state is being written and refreshed. */
+    val guideReadPendingKeys: Set<String> = emptySet(),
     val destination: LibraryDestination = LibraryDestination.BOOKS,
     val selectedShelfId: String? = null,
     val selectedSftpServerId: String? = null,
@@ -249,6 +251,7 @@ interface AppActions {
     fun onDownloadGuideSection(sectionIndex: Int) {}
     fun onDownloadGuideItem(key: String) {}
     fun onRevealGuideItem(key: String) {}
+    fun onSetGuideItemRead(key: String, read: Boolean) {}
     fun onToggleGuideFavorite(id: String) {}
     fun onSyncGuides() {}
     fun onExportGuide(id: String) {}

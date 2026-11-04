@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
@@ -45,8 +46,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,7 +69,13 @@ private enum class GuideFilter { ALL, TO_READ, READ, MISSING }
 
 /** A reading order: progress at a glance, the next book to read, and every gap still to obtain. */
 @Composable
-internal fun ReadingGuideContent(guide: UiGuideView?, covers: List<String>, actions: AppActions, modifier: Modifier = Modifier) {
+internal fun ReadingGuideContent(
+    guide: UiGuideView?,
+    covers: List<String>,
+    actions: AppActions,
+    modifier: Modifier = Modifier,
+    pendingReadKeys: Set<String> = emptySet(),
+) {
     if (guide == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -87,13 +101,6 @@ internal fun ReadingGuideContent(guide: UiGuideView?, covers: List<String>, acti
     val activeSection = guide.sections.indexOfFirst { section -> section.items.any { it === current } }
     LazyColumn(modifier.fillMaxSize().testTag("reading_guide"), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "hero") { GuideHero(guide, covers, read, available, missing, items.size) }
-        if (guide.checking) item(key = "checking") {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text(stringResource(R.string.native_guide_checking), style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 10.dp))
-            }
-        }
         if (next != null) item(key = "next") { NextReading(next, actions) }
         item(key = "filters") {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -133,7 +140,8 @@ internal fun ReadingGuideContent(guide: UiGuideView?, covers: List<String>, acti
             if (!isCollapsed) {
                 val list = visible
                 items(list, key = { "item:$index:${it.key}" }) { item ->
-                    GuideItemRow(item, first = item === list.first(), last = item === list.last(), actions = actions)
+                    GuideItemRow(item, first = item === list.first(), last = item === list.last(), actions = actions,
+                        readPending = item.key in pendingReadKeys)
                 }
             }
         }
@@ -458,22 +466,57 @@ private fun SectionHeader(section: UiGuideSection, collapsed: Boolean, pinned: B
 }
 
 @Composable
-private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actions: AppActions) {
+private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actions: AppActions, readPending: Boolean = false) {
     val missing = item.status == GuideItemStatus.MISSING
     val target = item.files.firstOrNull { it.progress < 1f && it.available != false } ?: item.files.firstOrNull { it.available != false }
+    val read = item.status == GuideItemStatus.READ
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)
-        .clickable(enabled = target != null) { target?.let { actions.onOpenGuideFile(it.path) } }
         .padding(start = 16.dp, end = 16.dp)
         .animateContentSize()) {
         // The timeline: a line through every entry and a node that tells its state.
-        Box(Modifier.width(36.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.width(48.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
             Box(Modifier.fillMaxHeight().width(2.dp).drawBehind {
                 val top = if (first) size.height * .18f else 0f
                 val bottom = if (last) size.height * .18f else size.height
                 drawLine(lineColor, Offset(size.width / 2, top), Offset(size.width / 2, bottom), 2.dp.toPx())
             })
-            StatusNode(item, Modifier.padding(top = 14.dp))
+            if (item.files.isNotEmpty()) {
+                val label = stringResource(if (readPending) R.string.native_guide_updating_read_state
+                    else if (read) R.string.native_guide_mark_unread else R.string.native_mark_read)
+                Box(
+                    Modifier.padding(top = 7.dp).size(48.dp)
+                        .pointerInput(item.key, read, readPending) {
+                            detectTapGestures {
+                                if (!readPending) actions.onSetGuideItemRead(item.key, !read)
+                            }
+                        }
+                        .semantics {
+                            contentDescription = label
+                            role = Role.Button
+                            if (readPending) disabled()
+                            else onClick(label) { actions.onSetGuideItemRead(item.key, !read); true }
+                        }
+                        .testTag("guide_read:${item.key}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (readPending) {
+                        val primary = MaterialTheme.colorScheme.primary
+                        Box(
+                            Modifier.size(26.dp)
+                                .then(if (read) Modifier.background(ReadGreen, CircleShape) else Modifier
+                                    .background(MaterialTheme.colorScheme.surface, CircleShape)
+                                    .border(2.dp, primary, CircleShape)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                Modifier.size(17.dp).testTag("guide_read_progress:${item.key}"), strokeWidth = 2.dp,
+                                color = if (read) Color.White else primary,
+                            )
+                        }
+                    } else StatusNode(item)
+                }
+            } else StatusNode(item, Modifier.padding(top = 14.dp))
         }
         val shape = RoundedCornerShape(16.dp)
         val dashed = MaterialTheme.colorScheme.outline
@@ -482,7 +525,7 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
             modifier = Modifier.weight(1f).padding(vertical = 5.dp).then(if (missing) Modifier.drawBehind {
                 drawRoundRect(dashed.copy(alpha = .6f), cornerRadius = CornerRadius(16.dp.toPx()),
                     style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
-            } else Modifier)) {
+            } else Modifier).clickable(enabled = target != null) { target?.let { actions.onOpenGuideFile(it.path) } }) {
             Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 GuideCover(item, missing, Modifier.align(Alignment.Top))
                 Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -491,7 +534,7 @@ private fun GuideItemRow(item: UiGuideItem, first: Boolean, last: Boolean, actio
                         color = if (missing) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
                     if (item.scope.isNotBlank()) ScopeLine(item.scope)
                     Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StatusChip(item.status)
+                        StatusChip(item)
                         if (item.priority.isNotBlank()) PriorityChip(item.priority)
                         item.readingMinutes?.let { Pill("≈ ${readingTime(it)}", MaterialTheme.colorScheme.secondary) }
                     }
@@ -598,11 +641,16 @@ private fun FileStrip(item: UiGuideItem, actions: AppActions) {
 }
 
 @Composable
-private fun StatusChip(status: GuideItemStatus) {
+private fun StatusChip(item: UiGuideItem) {
+    val status = item.status
     val (label, color) = when (status) {
         GuideItemStatus.READ -> R.string.native_guide_status_read to ReadGreen
         GuideItemStatus.READING -> R.string.native_guide_status_reading to ReadingAmber
-        GuideItemStatus.AVAILABLE -> R.string.native_guide_status_available to MaterialTheme.colorScheme.primary
+        GuideItemStatus.AVAILABLE -> (if (item.files.all { it.bookId != null }) {
+            R.string.native_guide_status_downloaded
+        } else {
+            R.string.native_guide_status_not_downloaded
+        }) to MaterialTheme.colorScheme.primary
         GuideItemStatus.PARTIAL -> R.string.native_guide_status_partial to MaterialTheme.colorScheme.tertiary
         GuideItemStatus.MISSING -> R.string.native_guide_status_missing to MaterialTheme.colorScheme.outline
         GuideItemStatus.UNKNOWN -> R.string.native_guide_status_unknown to MaterialTheme.colorScheme.outline

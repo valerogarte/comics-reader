@@ -171,6 +171,57 @@ class NativeUiInstrumentedTest {
         compose.runOnIdle { assertEquals("/Comics", actions.folders.last()) }
     }
 
+    @Test fun readingGuideBulletTogglesBetweenNumberAndCheckWithoutOpeningComic() {
+        val file = UiGuideFile("/fixture.cbz", "fixture.cbz", available = true)
+        val item = UiGuideItem("fixture-item", "07", "Cómic de prueba", "", "", "", "",
+            listOf(file), GuideItemStatus.READ)
+        val nextItem = UiGuideItem("fixture-next", "08", "Siguiente cómic", "", "", "", "",
+            listOf(file.copy(path = "/next.cbz", name = "next.cbz")), GuideItemStatus.AVAILABLE)
+        compose.runOnIdle {
+            actions.state = actions.state.copy(
+                destination = LibraryDestination.GUIDE,
+                selectedGuideId = "fixture-guide",
+                guides = listOf(UiGuideSummary("fixture-guide", "Guía de prueba", 1)),
+                guide = UiGuideView("fixture-guide", "Guía de prueba", "", null,
+                    listOf(UiGuideSection("Sección", listOf(item, nextItem)))),
+            )
+        }
+
+        val bullet = compose.onNodeWithTag("guide_read:fixture-item")
+        bullet.performScrollTo().assertIsDisplayed().assertContentDescriptionEquals("Marcar como no leído")
+        bullet.performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(listOf("fixture-item" to false), actions.guideReadChanges)
+            assertEquals(GuideItemStatus.AVAILABLE, actions.state.guide!!.items.first().status)
+            assertTrue(actions.openedGuideFiles.isEmpty())
+        }
+        bullet.assertContentDescriptionEquals("Marcar como leído")
+        bullet.performTouchInput { click(center) }
+        compose.runOnIdle {
+            assertEquals(listOf("fixture-item" to false, "fixture-item" to true), actions.guideReadChanges)
+            assertEquals(GuideItemStatus.READ, actions.state.guide!!.items.first().status)
+            assertTrue(actions.openedGuideFiles.isEmpty())
+        }
+
+        compose.runOnIdle { actions.state = actions.state.copy(guideReadPendingKeys = setOf("fixture-item")) }
+        bullet.assertContentDescriptionEquals("Actualizando estado de lectura…")
+        compose.onNodeWithTag("guide_read_progress:fixture-item").assertIsDisplayed()
+        compose.runOnIdle {
+            val guide = actions.state.guide!!
+            actions.state = actions.state.copy(guide = guide.copy(sections = guide.sections.map { section ->
+                section.copy(items = section.items.map { entry ->
+                    if (entry.key == "fixture-item") entry.copy(status = GuideItemStatus.AVAILABLE,
+                        files = entry.files.map { it.copy(progress = 0f) }) else entry
+                })
+            }))
+        }
+        bullet.assertContentDescriptionEquals("Actualizando estado de lectura…")
+        compose.onNodeWithTag("guide_read_progress:fixture-item").assertIsDisplayed()
+        compose.runOnIdle { actions.state = actions.state.copy(guideReadPendingKeys = emptySet()) }
+        bullet.assertContentDescriptionEquals("Marcar como leído")
+        compose.onNodeWithTag("guide_read_progress:fixture-item").assertDoesNotExist()
+    }
+
     @Test fun filtersLayoutAndScrollStateSurviveReaderRoundTrip() {
         compose.onNodeWithTag("filter:UNREAD").performClick()
         compose.onNodeWithTag("book:unread").assertExists()
@@ -368,6 +419,8 @@ class NativeUiInstrumentedTest {
         val createdShelves = ArrayList<String>()
         val pages = ArrayList<Int>()
         val confirmedPages = ArrayList<Int>()
+        val guideReadChanges = ArrayList<Pair<String, Boolean>>()
+        val openedGuideFiles = ArrayList<String>()
         var imports = 0; var fontImports = 0; var backgroundImports = 0; var syncs = 0; var downloadAll = 0
         override fun onShowSettings() { state = state.copy(settingsVisible = true) }
         override fun onCloseSettings() { state = state.copy(settingsVisible = false) }
@@ -395,6 +448,19 @@ class NativeUiInstrumentedTest {
         override fun onDownloadRemote(path: String) { downloads += state.selectedSftpServerId to path; state = state.copy(remoteEntries = state.remoteEntries.map { if (it.path == path) it.copy(downloaded = true) else it }) }
         override fun onDownloadAll() { downloadAll++; state = state.copy(remoteEntries = state.remoteEntries.map { it.copy(downloaded = true) }) }
         override fun onOpenBook(id: String) { openReader(id = id) }
+        override fun onOpenGuideFile(path: String) { openedGuideFiles += path }
+        override fun onSetGuideItemRead(key: String, read: Boolean) {
+            guideReadChanges += key to read
+            val guide = state.guide ?: return
+            state = state.copy(guide = guide.copy(sections = guide.sections.map { section ->
+                section.copy(items = section.items.map { item ->
+                    if (item.key != key) item else item.copy(
+                        status = if (read) GuideItemStatus.READ else GuideItemStatus.AVAILABLE,
+                        files = item.files.map { it.copy(progress = if (read) 1f else 0f) },
+                    )
+                })
+            }))
+        }
         fun openReader(page: Int = 0, id: String = "unread") { state = state.copy(reader = UiReaderState(id, "Lectura", pageIndex = page, pageCount = 10, bitmap = bitmap, reflowable = true, bitmapPageIndex = page)) }
         override fun onReaderPage(pageIndex: Int) {
             val reader = state.reader ?: return

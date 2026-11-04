@@ -212,9 +212,12 @@
     <string name="native_guide_next">Tu siguiente lectura</string>
     <string name="native_guide_read_now">Leer ahora</string>
     <string name="native_guide_download_read">Descargar y leer</string>
+    <string name="native_guide_mark_unread">Marcar como no leído</string>
+    <string name="native_guide_updating_read_state">Actualizando estado de lectura…</string>
     <string name="native_guide_status_read">Leído</string>
     <string name="native_guide_status_reading">Leyendo</string>
-    <string name="native_guide_status_available">Disponible</string>
+    <string name="native_guide_status_downloaded">Descargado</string>
+    <string name="native_guide_status_not_downloaded">Sin descargar</string>
     <string name="native_guide_status_partial">Parcial</string>
     <string name="native_guide_status_missing">Pendiente de obtener</string>
     <string name="native_guide_status_unknown">Sin comprobar</string>

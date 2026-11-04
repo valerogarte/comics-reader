@@ -127,6 +127,26 @@ fun ComicsApp(state: AppUiState, actions: AppActions) {
     }
 }
 
+@Composable
+private fun GuideRefreshButton(checking: Boolean, onClick: () -> Unit) {
+    val rotation = if (checking) {
+        androidx.compose.animation.core.rememberInfiniteTransition(label = "guide-refresh").animateFloat(
+            initialValue = 0f,
+            targetValue = -360f,
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                animation = androidx.compose.animation.core.tween(
+                    durationMillis = 900,
+                    easing = androidx.compose.animation.core.LinearEasing,
+                ),
+            ),
+            label = "guide-refresh-rotation",
+        ).value
+    } else 0f
+    IconButton(onClick = onClick, enabled = !checking) {
+        Icon(Icons.Default.Sync, stringResource(R.string.native_sync), Modifier.graphicsLayer { rotationZ = rotation })
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LibraryScreen(state: AppUiState, actions: AppActions) {
@@ -412,9 +432,7 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                                 Icon(if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
                                     stringResource(if (favorite) R.string.native_guide_unfavorite else R.string.native_guide_favorite))
                             }
-                            IconButton(onClick = actions::onRefreshGuide, enabled = state.guide?.checking != true) {
-                                Icon(Icons.Default.Sync, stringResource(R.string.native_sync))
-                            }
+                            GuideRefreshButton(state.guide?.checking == true, actions::onRefreshGuide)
                             if (guideId != null) IconButton(onClick = { actions.onExportGuide(guideId) }) {
                                 Icon(Icons.Default.IosShare, stringResource(R.string.native_export_guide))
                             }
@@ -465,7 +483,9 @@ private fun LibraryScreen(state: AppUiState, actions: AppActions) {
                     ReadingGuideList(state.guides, state.guidesSyncing, actions)
                 } else if (isGuide) {
                     val covers = state.guides.find { it.id == state.selectedGuideId }?.covers.orEmpty()
-                    guideStates.SaveableStateProvider("guide:${state.selectedGuideId}") { ReadingGuideContent(state.guide, covers, actions) }
+                    guideStates.SaveableStateProvider("guide:${state.selectedGuideId}") {
+                        ReadingGuideContent(state.guide, covers, actions, pendingReadKeys = state.guideReadPendingKeys)
+                    }
                 } else if (isRemote && state.settings.sftpServers.isEmpty()) {
                     EmptyLibrary(Icons.Default.Storage, stringResource(R.string.native_configure_sftp), stringResource(R.string.native_configure_sftp_detail), actions::onShowSettings, R.string.native_configure_sftp)
                 } else if (isRemote && server == null) {

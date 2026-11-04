@@ -32,6 +32,14 @@ import kotlin.math.roundToInt
 
 private const val MAX_READING_GAP_MILLIS = 3 * 60_000L
 
+/** A retained reading-log entry with no furthest page is explicitly unread after the guide toggle. */
+internal fun ReadingLogEntry?.guideProgress(): Float = when {
+    this == null -> 0f
+    finishedAt != null -> 1f
+    startedAt != null && furthestPage > 0 -> 0.5f
+    else -> 0f
+}
+
 class LibraryViewModel(application: Application) : AndroidViewModel(application), AppActions {
     private val repository = LibraryRepository(application)
     private val engine = NativeDocumentEngine(application)
@@ -404,6 +412,38 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    override fun onSetGuideItemRead(key: String, read: Boolean) {
+        val current = mutableState.value
+        if (key in current.guideReadPendingKeys) return
+        val guide = current.guide ?: return
+        val item = guide.items.find { it.key == key } ?: return
+        if (item.files.isEmpty()) return
+        mutableState.update { it.copy(guideReadPendingKeys = it.guideReadPendingKeys + key) }
+        launchOperation {
+            try {
+                val context = loadGuideContext(guide.id) ?: throw IOException("No se ha podido cargar la guía")
+                val sourceId = context.sourceId ?: throw IOException("Configura el servidor SFTP de la guía «${guide.title}»")
+                item.files.distinctBy { it.path }.forEach { file ->
+                    repository.setGuideFileRead(sourceId, file.path, item.title, file.coverPath, read)
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    try {
+                        try { reloadLibrary() }
+                        finally {
+                            val latest = mutableState.value
+                            if (latest.destination == LibraryDestination.GUIDE && latest.selectedGuideId == guide.id) {
+                                showGuide(guide.id, latest.guide?.checking == true)
+                            }
+                        }
+                    } finally {
+                        mutableState.update { it.copy(guideReadPendingKeys = it.guideReadPendingKeys - key) }
+                    }
+                }
+            }
+        }
+    }
+
     /** Queues every book of one guide entry that is on the server and not on the device. */
     override fun onDownloadGuideItem(key: String) {
         val guide = mutableState.value.guide ?: return
@@ -562,11 +602,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     val log = logs[sourceId to path]
                     val parent = remoteParentPath(path)
                     val known = folderKnown.getOrPut(parent) { repository.isFolderCached(sourceId, parent) }
-                    val progress = book?.let(::progress) ?: when {
-                        log?.finishedAt != null -> 1f
-                        log?.startedAt != null -> 0.5f
-                        else -> 0f
-                    }
+                    val progress = book?.let(::progress) ?: log.guideProgress()
                     UiGuideFile(path, entry?.title ?: name.substringBeforeLast('.'), entry?.coverPath ?: book?.coverPath ?: log?.coverPath,
                         book?.id, progress, available = when { book != null || entry != null -> true; known -> false; else -> null },
                         downloading = path in transferring)
@@ -607,9 +643,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val paths = items.map { item -> item.files.map { guideRelativePath(it, context.root) } }
         val progress = paths.map { files ->
             files.map { path ->
-                downloadedBooks[sourceId to path]?.let(::progress) ?: logs[path]?.let { log ->
-                    when { log.finishedAt != null -> 1f; log.startedAt != null -> 0.5f; else -> 0f }
-                } ?: 0f
+                downloadedBooks[sourceId to path]?.let(::progress) ?: logs[path].guideProgress()
             }
         }
         val read = progress.count { it.isNotEmpty() && it.all { value -> value >= 1f } }

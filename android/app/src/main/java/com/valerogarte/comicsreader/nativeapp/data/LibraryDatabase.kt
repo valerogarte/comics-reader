@@ -224,6 +224,36 @@ internal class LibraryDatabase(context: Context) : SQLiteOpenHelper(context, "na
 
     fun readingLogEntry(id: String): ReadingLogEntry? = readingLog(id)
 
+    fun readingLogForRemote(sourceId: String, path: String): ReadingLogEntry? = readableDatabase.rawQuery(
+        "SELECT * FROM reading_log WHERE source_id=? AND remote_path=? ORDER BY last_read_at DESC LIMIT 1",
+        arrayOf(sourceId, path),
+    ).use { if (it.moveToFirst()) it.readingLogEntry() else null }
+
+    /** A guide can record a finished remote comic even before its file is downloaded. */
+    fun markRemoteFinished(sourceId: String, path: String, title: String, coverPath: String?) = transaction {
+        val existing = readingLogForRemote(sourceId, path)
+        val now = System.currentTimeMillis()
+        val log = existing ?: ReadingLogEntry("sftp:$sourceId:$path", title, 0L, 0, 0, now, now, now,
+            coverPath, sourceId, path)
+        writeReadingLog(log.copy(
+            title = title.ifBlank { log.title },
+            furthestPage = maxOf(log.furthestPage, (log.pageCount - 1).coerceAtLeast(0)),
+            startedAt = log.startedAt ?: now,
+            finishedAt = log.finishedAt ?: now,
+            lastReadAt = now,
+            coverPath = log.coverPath ?: coverPath,
+            sourceId = sourceId,
+            remotePath = path,
+        ))
+    }
+
+    /** Mirrors the local book action: undo the finish but preserve substantial reading history. */
+    fun markRemoteUnread(sourceId: String, path: String) = transaction {
+        val log = readingLogForRemote(sourceId, path) ?: return@transaction
+        if (log.seconds < READING_SECONDS) writableDatabase.delete("reading_log", "book_id=?", arrayOf(log.bookId))
+        else writeReadingLog(log.copy(finishedAt = null, furthestPage = 0))
+    }
+
     /**
      * A book downloaded again takes over the chronology of the same server file: one entry per
      * book, and the read state it already had.

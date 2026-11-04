@@ -10,6 +10,7 @@ import com.valerogarte.comicsreader.nativeapp.model.ReadingStatus
 import com.valerogarte.comicsreader.nativeapp.model.RemoteEntry
 import com.valerogarte.comicsreader.nativeapp.model.RemoteFolder
 import com.valerogarte.comicsreader.nativeapp.model.SftpConfig
+import com.valerogarte.comicsreader.nativeapp.guideProgress
 import com.valerogarte.comicsreader.nativeapp.qa.QaApplication
 import com.valerogarte.comicsreader.sftp.SftpClient
 import java.io.File
@@ -228,6 +229,27 @@ class NativeDataInstrumentedTest {
         assertTrue(repository.loadShelves().isEmpty())
         assertTrue(File(context.filesDir, "native-library/books").listFiles().orEmpty().isEmpty())
         assertTrue(source.isFile)
+    }
+
+    @Test fun markingRemoteComicUnreadReturnsGuideToNumberAndKeepsReadingHistory() = withDatabase { db ->
+        val sourceId = "qa-source"
+        val path = "/Comics/Prueba.cbz"
+        db.markRemoteFinished(sourceId, path, "Cómic de prueba", null)
+        db.writableDatabase.execSQL(
+            "UPDATE reading_log SET seconds=600, furthest_page=12, page_count=24 WHERE source_id=? AND remote_path=?",
+            arrayOf(sourceId, path),
+        )
+
+        db.markRemoteUnread(sourceId, path)
+
+        val log = requireNotNull(db.readingLogForRemote(sourceId, path))
+        assertEquals(600L, log.seconds)
+        assertNotNull(log.startedAt)
+        assertNull(log.finishedAt)
+        assertEquals(0, log.furthestPage)
+        assertEquals(0f, log.guideProgress())
+        assertEquals(0.5f, log.copy(furthestPage = 12).guideProgress())
+        assertEquals(1f, log.copy(finishedAt = requireNotNull(log.startedAt) + 1).guideProgress())
     }
 
     @Test fun replacingDirectoryPurgesOnlyItsCachedSubtree() = withDatabase { db ->

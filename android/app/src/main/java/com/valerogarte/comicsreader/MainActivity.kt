@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
             override fun onImportBooks() { importBooks.launch(arrayOf("*/*")) }
             override fun onImportFont() { importFont.launch(arrayOf("*/*")) }
             override fun onPickBackground() { importBackground.launch(arrayOf("image/*")) }
+            override fun onSetGuideItemRead(key: String, read: Boolean) { model.onSetGuideItemRead(key, read) }
             override fun onExportGuide(id: String) {
                 exportingGuideId = id
                 val title = model.guideTitle(id)?.replace(Regex("[^\\p{L}\\p{N} ._-]"), "")?.trim().orEmpty().ifEmpty { "guia" }

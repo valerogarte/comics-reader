@@ -245,6 +245,27 @@ class LibraryRepository(context: Context) : Closeable {
 
     suspend fun markUnread(ids: Collection<String>) = withContext(Dispatchers.IO) { ids.forEach { database.markUnread(it) } }
 
+    /** Marks a guide file by its server origin, including comics that are not downloaded yet. */
+    suspend fun setGuideFileRead(sourceId: String, path: String, title: String, coverPath: String?, read: Boolean) =
+        withContext(Dispatchers.IO) {
+            mutation.withLock {
+                val book = database.downloaded(sourceId, path)?.takeIf { File(it.localPath).isFile }
+                if (book != null) {
+                    if (read) {
+                        database.markFinished(book.id)
+                        keepHistory(book)
+                    } else database.markUnread(book.id)
+                } else if (read) {
+                    val existingCover = database.readingLogForRemote(sourceId, path)?.coverPath?.takeIf { File(it).isFile }
+                    val historyCover = existingCover ?: coverPath?.let(::File)?.takeIf { it.isFile }?.let { cover ->
+                        val name = sha256("$sourceId\u0000$path")
+                        copyPrivateFile(cover, File(historyCoversDirectory, "$name.jpg"))
+                    }
+                    database.markRemoteFinished(sourceId, path, title, historyCover)
+                } else database.markRemoteUnread(sourceId, path)
+            }
+        }
+
     /** Copies the cover into the chronology and records where the book came from, once. */
     private fun keepHistory(book: BookEntry) {
         val log = database.readingLogEntry(book.id) ?: return
